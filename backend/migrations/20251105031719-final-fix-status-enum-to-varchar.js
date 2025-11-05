@@ -1,3 +1,4 @@
+// backend/migrations/20251105031719-final-fix-status-enum-to-varchar.js
 'use strict';
 
 // Ambil nama ENUM yang error dari log Anda

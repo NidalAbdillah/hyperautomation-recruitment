@@ -1,3 +1,4 @@
+// frontend/src/components/hr/ArchivedCVsTable.jsx
 import React from "react";
 import {
   ArrowUpIcon,

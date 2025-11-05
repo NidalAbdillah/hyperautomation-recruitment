@@ -1,7 +1,7 @@
+// backend/src/models/cvApplication.model.ts
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database";
 
-// 1. Definisikan atribut model
 interface CvApplicationAttributes {
   id: number;
   fullName: string;
@@ -22,7 +22,6 @@ interface CvApplicationAttributes {
   readonly updatedAt?: Date;
 }
 
-// 2. Definisikan atribut opsional saat pembuatan
 interface CvApplicationCreationAttributes extends Optional<
   CvApplicationAttributes,
   | "id"
@@ -36,7 +35,6 @@ interface CvApplicationCreationAttributes extends Optional<
   | "isArchived"
 > {}
 
-// 3. Buat Class Model
 class CvApplication extends Model<CvApplicationAttributes, CvApplicationCreationAttributes> implements CvApplicationAttributes {
   public id!: number;
   public fullName!: string;
@@ -58,7 +56,6 @@ class CvApplication extends Model<CvApplicationAttributes, CvApplicationCreation
   public readonly updatedAt!: Date;
 }
 
-// 4. Inisialisasi Model
 CvApplication.init(
   {
     id: {
@@ -135,8 +132,7 @@ CvApplication.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: "job_positions", // Merujuk ke tableName
-        key: "id",
+        model: "job_positions",
       },
       onUpdate: "CASCADE",
       onDelete: "SET NULL",

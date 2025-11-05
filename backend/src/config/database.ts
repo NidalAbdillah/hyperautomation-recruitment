@@ -1,8 +1,7 @@
 // src/config/database.ts
 import { Sequelize, Dialect } from "sequelize";
-import config from "./index"; // Mengambil dari config TS yang baru
+import config from "./index";
 
-// Validasi bahwa konfigurasi DB ada
 if (
   !config.db.name ||
   !config.db.user ||

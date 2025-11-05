@@ -1,4 +1,4 @@
-// src/app.ts
+// backend/src/app.ts
 import express, { Express, Request, Response, NextFunction } from "express";
 import cors from "cors";
 import apiRoutes = require("./routes"); 

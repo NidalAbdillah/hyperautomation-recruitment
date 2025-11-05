@@ -1,3 +1,4 @@
+// backend/config/config.js
 require("dotenv").config(); // Pastikan ini membaca .env Anda
 
 const development = {

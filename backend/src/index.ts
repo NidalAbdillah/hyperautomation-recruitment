@@ -1,4 +1,4 @@
-// src/index.ts
+// backend/src/index.ts
 import { app, initializeApp } from "./app"; // Menggunakan import ES Module
 import config from "./config"; // Mengimpor konfigurasi (akan kita buat di langkah 3)
 

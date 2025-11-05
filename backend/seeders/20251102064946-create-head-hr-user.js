@@ -1,3 +1,4 @@
+// backend/seeders/20251102064946-create-head-hr-user.js
 'use strict';
 // Kita tetap pakai bcryptjs di sini, hash-nya 100% kompatibel
 // dengan 'bcrypt.compare' di service TS Anda.
