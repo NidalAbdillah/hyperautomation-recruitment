@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  namespace: isr-internship
+  labels:
+    app: isr-internship-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: isr-internship-frontend
+  template:
+    metadata:
+      labels:
+        app: isr-internship-frontend
+    spec:
+      imagePullSecrets:
+        - name: harbor-secret # Sesuaikan jika nama secret di namespace Anda berbeda
+      containers:
+        - name: frontend
+          image: registry.infrasvc.id/isr-internship/frontend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: frontend-configmap

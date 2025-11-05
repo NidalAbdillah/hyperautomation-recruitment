@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    /* Pilihan Target & Modul */
+    "target": "es2020", // Target JavaScript modern
+    "module": "commonjs", // Sistem modul Node.js
+    "outDir": "./dist", // Folder output (hasil compile JavaScript)
+    "rootDir": "./src", // Folder input (kode TypeScript Anda)
+
+    /* Pilihan Pengecekan Ketat (Strictness) */
+    "strict": true, // WAJIB: Ini yang akan disukai dosen OOP Anda
+    "noImplicitAny": true, // Memaksa Anda memberi tipe data
+
+    /* Pilihan Interoperabilitas Modul */
+    "esModuleInterop": true, // Memudahkan impor library (seperti Express)
+    "forceConsistentCasingInFileNames": true,
+
+    /* Pilihan Lain */
+    "skipLibCheck": true, // Melewatkan pengecekan file .d.ts dari library
+    "resolveJsonModule": true // Mengizinkan impor file .json
+  },
+  "include": [
+    "src/**/*" // Hanya kompilasi file di dalam folder /src
+  ],
+  "exclude": [
+    "node_modules" // Jangan sentuh node_modules
+  ]
+}
