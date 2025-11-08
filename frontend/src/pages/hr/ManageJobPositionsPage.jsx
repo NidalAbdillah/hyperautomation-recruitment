@@ -21,21 +21,13 @@ import "react-datepicker/dist/react-datepicker.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_ADMIN_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions`;
-const API_UPDATE_POSITION_URL = (id) =>
-  `${API_BASE_URL}/api/hr/job-positions/${id}`;
-const API_DELETE_POSITION_URL = (id) =>
-  `${API_BASE_URL}/api/hr/job-positions/${id}`;
-// --- 2. ENDPOINT API BARU ---
-const API_ARCHIVE_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions/archive`;
+const API_UPDATE_POSITION_URL = (id) => `${API_BASE_URL}/api/hr/job-positions/${id}`;
+const API_DELETE_POSITION_URL = (id) => `${API_BASE_URL}/api/hr/job-positions/${id}`;
+// --- 2. ENDPOINT API BARU (dari routes) ---
+const API_ARCHIVE_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions/archive`; 
 
 const STAFF_HR_VISIBLE_STATUS = ["Approved", "Open", "Closed"];
-const POSITION_STATUS_OPTIONS = [
-  "Draft",
-  "Approved",
-  "Open",
-  "Closed",
-  "Rejected",
-];
+const POSITION_STATUS_OPTIONS = [ "Draft", "Approved", "Open", "Closed", "Rejected" ];
 const getAuthToken = () => localStorage.getItem("token");
 const ITEMS_PER_PAGE = 10;
 
@@ -55,7 +47,7 @@ function ManageJobPositionsPage() {
   const [sortColumn, setSortColumn] = useState("createdAt");
   const [sortDirection, setSortDirection] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
-
+  
   // --- 3. STATE BARU (Tiru ManageCVsPage) ---
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedPositions, setSelectedPositions] = useState([]);
@@ -68,16 +60,14 @@ function ManageJobPositionsPage() {
       const token = getAuthToken();
       if (!token) throw new Error("Token tidak ditemukan");
 
-      // Asumsi backend Anda sekarang bisa menerima ?isArchived=false
-      // Jika belum, filter lokal akan menanganinya di processedPositions
+      // Panggil backend service listAllPositions (yang sudah kita update)
       const response = await axios.get(API_ADMIN_POSITIONS_URL, {
         headers: { Authorization: `Bearer ${token}` },
-        // params: { isArchived: false } // <-- Idealnya, filter di backend
       });
 
       let positions = response.data;
 
-      // Filter "Sadar Peran"
+      // Filter "Sadar Peran" (Frontend tetap filter, best practice)
       if (user) {
         if (user.role === "staff_hr") {
           positions = positions.filter((pos) =>
@@ -88,8 +78,8 @@ function ManageJobPositionsPage() {
             (pos) => pos.requestor && pos.requestor.id === user.id
           );
         }
-        // (Head HR tidak difilter)
       }
+      // Service backend sudah filter 'isArchived: false', jadi tidak perlu filter di sini
       setAllPositions(positions);
     } catch (err) {
       setError(err);
@@ -104,10 +94,10 @@ function ManageJobPositionsPage() {
     }
   }, [fetchAllPositions, user]);
 
-  // --- 5. PROCESSED DATA (Filter 'isArchived: false' di frontend) ---
+  // --- 5. PROCESSED DATA (Tiru ManageCVsPage) ---
   const processedPositions = useMemo(() => {
-    // Filter lokal 'isArchived'
-    let filtered = allPositions.filter((pos) => !pos.isArchived);
+    // Filter 'isArchived' TIDAK PERLU lagi, karena backend service sudah melakukannya
+    let filtered = [...allPositions]; 
 
     // (Filtering, Sorting, Paginasi... tetap sama)
     // 1. Filtering
@@ -202,14 +192,7 @@ function ManageJobPositionsPage() {
     if (!isSelectMode) {
       setSelectedPositions([]);
     }
-  }, [
-    searchTerm,
-    statusFilter,
-    dateFilter,
-    sortColumn,
-    sortDirection,
-    isSelectMode,
-  ]);
+  }, [searchTerm, statusFilter, dateFilter, sortColumn, sortDirection, isSelectMode]);
 
   // (Handlers Filter & Paginasi tetap sama)
   const handleSearchChange = (e) => setSearchTerm(e.target.value);
@@ -363,10 +346,9 @@ function ManageJobPositionsPage() {
   };
 
   // --- 8. HANDLER AKSI MASAL (BULK ACTION) BARU ---
-
-  // Handler untuk Tombol Arsip Individual
+  
+  // Handler untuk Tombol Arsip (Individual & Bulk)
   const handleArchivePosition = async (positionIds) => {
-    // (Akan dipanggil oleh Bulk Handler di bawah)
     Notiflix.Confirm.show(
       "Konfirmasi Arsip",
       `Anda yakin ingin mengarsipkan ${positionIds.length} lowongan? Lowongan harus berstatus 'Closed'.`,
@@ -374,79 +356,51 @@ function ManageJobPositionsPage() {
       "Batal",
       async () => {
         Notiflix.Loading.standard("Mengarsipkan...");
-
+        
         // Filter di frontend: Hanya arsipkan yang 'Closed'
-        const positionsToArchive = allPositions.filter(
-          (p) => positionIds.includes(p.id) && p.status === "Closed"
+        const positionsToArchive = allPositions.filter(p => 
+          positionIds.includes(p.id) && p.status === 'Closed'
         );
-        const idsToArchive = positionsToArchive.map((p) => p.id);
-
+        const idsToArchive = positionsToArchive.map(p => p.id);
+        
         if (idsToArchive.length === 0) {
-          Notiflix.Loading.remove();
-          Notiflix.Report.info(
-            "Tidak Ada Arsip",
-            "Hanya lowongan berstatus 'Closed' yang dapat diarsipkan.",
-            "Okay"
-          );
-          return;
+           Notiflix.Loading.remove();
+           Notiflix.Report.info("Tidak Ada Arsip", "Hanya lowongan berstatus 'Closed' yang dapat diarsipkan.", "Okay");
+           return;
         }
 
         try {
           const token = getAuthToken();
-          // Panggil API baru (Asumsi endpoint-nya: /api/hr/job-positions/archive)
+          // Panggil API baru (dari routes)
           await axios.put(
-            API_ARCHIVE_POSITIONS_URL,
+            API_ARCHIVE_POSITIONS_URL, 
             { ids: idsToArchive }, // Kirim array ID
             { headers: { Authorization: `Bearer ${token}` } }
           );
           Notiflix.Loading.remove();
-          Notiflix.Report.success(
-            "Berhasil Diarsip",
-            `${idsToArchive.length} lowongan berhasil diarsipkan.`,
-            "Okay"
-          );
-
+          Notiflix.Report.success("Berhasil Diarsip", `${idsToArchive.length} lowongan berhasil diarsipkan.`, "Okay");
+          
           fetchAllPositions(); // Refresh tabel
           setSelectedPositions([]); // Kosongkan seleksi
           setIsSelectMode(false); // Matikan mode select
+          
         } catch (err) {
           Notiflix.Loading.remove();
-          Notiflix.Report.failure(
-            "Gagal Arsip",
-            err.response?.data?.message || "Terjadi kesalahan.",
-            "Okay"
-          );
+          Notiflix.Report.failure("Gagal Arsip", err.response?.data?.message || "Terjadi kesalahan.", "Okay");
         }
       }
     );
   };
 
   // Quick Select Handlers
-  const handleSelectAll = useCallback(
-    () =>
-      setSelectedPositions(
-        processedPositions.filteredAndSortedData.map((p) => p.id)
-      ),
-    [processedPositions.filteredAndSortedData]
-  );
+  const handleSelectAll = useCallback(() => setSelectedPositions(processedPositions.filteredAndSortedData.map(p => p.id)), [processedPositions.filteredAndSortedData]);
   const handleSelectNone = useCallback(() => setSelectedPositions([]), []);
-  const handleSelectClosed = useCallback(
-    () =>
-      setSelectedPositions(
-        processedPositions.filteredAndSortedData
-          .filter((p) => p.status === "Closed")
-          .map((p) => p.id)
-      ),
-    [processedPositions.filteredAndSortedData]
-  );
+  const handleSelectClosed = useCallback(() => setSelectedPositions(processedPositions.filteredAndSortedData.filter(p => p.status === 'Closed').map(p => p.id)), [processedPositions.filteredAndSortedData]);
+
 
   // (Tampilan loading/error)
-  if (loading && allPositions.length === 0) {
-    /* ... */
-  }
-  if (error && allPositions.length === 0) {
-    /* ... */
-  }
+  if (loading && allPositions.length === 0) { /* ... */ }
+  if (error && allPositions.length === 0) { /* ... */ }
 
   return (
     <div className="manage-positions-page-container p-4">
@@ -520,19 +474,18 @@ function ManageJobPositionsPage() {
         {/* Tombol Aksi Kanan */}
         <div className="flex items-center space-x-2">
           {/* Tombol "Tambah" (Hanya untuk Head HR & Manager) */}
-          {(user?.role === "head_hr" || user?.role === "manager") &&
-            !isSelectMode && (
-              <button
-                onClick={handleAddPositionClick}
-                className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Buat Permintaan (Draft)
-              </button>
-            )}
-
+          {(user?.role === "head_hr" || user?.role === "manager") && !isSelectMode && (
+            <button
+              onClick={handleAddPositionClick}
+              className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+            >
+              <PlusIcon className="h-5 w-5 mr-2" />
+              Buat Permintaan (Draft)
+            </button>
+          )}
+          
           {/* --- 10. TOMBOL SELECT MODE BARU (Tiru ManageCVsPage) --- */}
-          {user?.role === "head_hr" && ( // Hanya Head HR yang bisa bulk archive/delete
+          {(user?.role === "head_hr") && ( // Hanya Head HR yang bisa bulk archive/delete
             <button
               onClick={handleToggleSelectMode}
               className={`flex items-center px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 text-sm whitespace-nowrap transition-colors duration-150 ${
@@ -542,16 +495,9 @@ function ManageJobPositionsPage() {
               }`}
             >
               {isSelectMode ? (
-                <>
-                  {" "}
-                  <XCircleIcon className="mr-1.5 h-4 w-4" /> Batal Pilih{" "}
-                </>
+                <> <XCircleIcon className="mr-1.5 h-4 w-4" /> Batal Pilih </>
               ) : (
-                <>
-                  {" "}
-                  <CheckCircleIcon className="mr-1.5 h-4 w-4" /> Pilih Aksi
-                  Masal{" "}
-                </>
+                <> <CheckCircleIcon className="mr-1.5 h-4 w-4" /> Pilih Aksi Masal </>
               )}
             </button>
           )}
@@ -565,49 +511,32 @@ function ManageJobPositionsPage() {
             <span className="text-sm font-medium text-gray-600 mr-2">
               Quick Select:
             </span>
-            <button
-              onClick={handleSelectAll}
-              className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-gray-600"
-            >
+            <button onClick={handleSelectAll} className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-gray-600">
               All ({processedPositions.filteredAndSortedData.length})
             </button>
-            <button
-              onClick={handleSelectNone}
-              disabled={selectedPositions.length === 0}
-              className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-gray-600"
-            >
+            <button onClick={handleSelectNone} disabled={selectedPositions.length === 0} className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-gray-600">
               None
             </button>
-            <button
-              onClick={handleSelectClosed}
-              className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-700"
-            >
+            <button onClick={handleSelectClosed} className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-700">
               Closed Only
             </button>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {selectedPositions.length > 0 ? (
               <>
-                <button
-                  onClick={() => handleArchivePosition(selectedPositions)}
-                  title="Arsipkan lowongan (Hanya yang 'Closed')"
+                <button 
+                  onClick={() => handleArchivePosition(selectedPositions)} 
+                  title="Arsipkan lowongan (Hanya yang 'Closed')" 
                   className="flex items-center px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400 text-white text-xs whitespace-nowrap"
                 >
-                  <ArchiveBoxIcon className="mr-1 h-4 w-4" /> Arsipkan (
-                  {selectedPositions.length})
+                  <ArchiveBoxIcon className="mr-1 h-4 w-4" /> Arsipkan ({selectedPositions.length})
                 </button>
-                <button
-                  onClick={() =>
-                    handleDeletePositionClick({
-                      id: selectedPositions,
-                      name: `${selectedPositions.length} lowongan`,
-                    })
-                  }
-                  title="Hapus lowongan terpilih"
+                <button 
+                  onClick={() => handleDeletePositionClick({ id: selectedPositions, name: `${selectedPositions.length} lowongan` })} 
+                  title="Hapus lowongan terpilih" 
                   className="flex items-center px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white text-xs whitespace-nowrap"
                 >
-                  <TrashIcon className="mr-1 h-4 w-4" /> Hapus (
-                  {selectedPositions.length})
+                  <TrashIcon className="mr-1 h-4 w-4" /> Hapus ({selectedPositions.length})
                 </button>
               </>
             ) : (
@@ -619,6 +548,7 @@ function ManageJobPositionsPage() {
         </div>
       )}
       {/* --- BATAS PANEL AKSI MASAL --- */}
+
 
       {/* Komponen Tabel */}
       <JobPositionsTable

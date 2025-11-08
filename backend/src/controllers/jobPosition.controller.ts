@@ -1,8 +1,8 @@
 // src/controllers/jobPosition.controller.ts
-import { Request, Response, NextFunction } from "express"; // <-- 1. Impor Tipe Express
-import jobPositionService from "../services/jobPosition.service"; // <-- 2. Ubah ke import OOP
-import { JobPositionDTO } from "../interfaces/IJobPositionService"; // <-- 3. Impor DTO (Kontrak)
-import { UserResponseDTO } from "../interfaces/IUserService"; // <-- 4. Impor DTO User
+import { Request, Response, NextFunction } from "express";
+import jobPositionService from "../services/jobPosition.service";
+import { JobPositionDTO } from "../interfaces/IJobPositionService";
+import { UserResponseDTO } from "../interfaces/IUserService";
 
 /**
  * Helper untuk menangani respons error yang konsisten.
@@ -10,16 +10,20 @@ import { UserResponseDTO } from "../interfaces/IUserService"; // <-- 4. Impor DT
 const handleErrorResponse = (res: Response, error: any) => {
   const statusCode = error.status || 500;
   const message = error.message || "An unexpected error occurred.";
-  console.error(`Controller Error: Status ${statusCode}, Message: ${message}`, error.stack); 
+  console.error(
+    `Controller Error: Status ${statusCode}, Message: ${message}`,
+    error.stack
+  );
   res.status(statusCode).json({ message });
 };
 
 /**
- * Mengambil lowongan yang 'Open' untuk publik.
+ * Mengambil lowongan yang 'Open' untuk publik (Tidak diarsip).
  */
 const listOpenPositions = async (req: Request, res: Response) => {
   console.log("Controller: Received request to list open job positions.");
   try {
+    // Service sudah di-update untuk filter isArchived: false
     const openPositions = await jobPositionService.getOpenPositions();
     res.status(200).json(openPositions);
   } catch (error: any) {
@@ -29,13 +33,12 @@ const listOpenPositions = async (req: Request, res: Response) => {
 };
 
 /**
- * Mengambil SEMUA lowongan untuk admin (tergantung role).
+ * Mengambil SEMUA lowongan yang AKTIF (Tidak diarsip) untuk admin.
  */
 const listAllPositions = async (req: Request, res: Response) => {
-  console.log("Controller: Received request to list all job positions for admin.");
+  console.log("Controller: Received request to list all ACTIVE job positions.");
   try {
-    // TODO (untuk nanti): Di Bab V, service ini harus difilter
-    // berdasarkan req.user.role (misal 'manager' hanya lihat miliknya).
+    // Service sudah di-update untuk filter isArchived: false
     const allPositions = await jobPositionService.listAllPositions();
     res.status(200).json(allPositions);
   } catch (error: any) {
@@ -49,19 +52,19 @@ const listAllPositions = async (req: Request, res: Response) => {
  */
 const getPositionById = async (req: Request, res: Response) => {
   try {
-    const positionId = parseInt(req.params.id, 10); // <-- 5. Parse ID
-    
+    const positionId = parseInt(req.params.id, 10);
     if (isNaN(positionId)) {
       const error: any = new Error("Invalid position ID.");
       error.status = 400;
       throw error;
     }
-
-    console.log(`Controller: Received request to get position with ID: ${positionId}`);
     const position = await jobPositionService.getPositionById(positionId);
     res.status(200).json(position);
   } catch (error: any) {
-    console.error(`Controller: Error getting position with ID ${req.params.id}:`, error);
+    console.error(
+      `Controller: Error getting position with ID ${req.params.id}:`,
+      error
+    );
     handleErrorResponse(res, error);
   }
 };
@@ -70,20 +73,19 @@ const getPositionById = async (req: Request, res: Response) => {
  * Membuat lowongan baru.
  */
 const createPosition = async (req: Request, res: Response) => {
-  // 6. Beri tipe data pada req.body sesuai DTO
-  const positionData = req.body as JobPositionDTO; 
-  // 7. Ambil 'user' dari 'req' (hasil dari middleware 'authenticate')
-  const user = req.user as UserResponseDTO; 
-  
-  console.log("CONTROLLER: Menerima data untuk CREATE:", JSON.stringify(positionData, null, 2));
+  const positionData = req.body as JobPositionDTO;
+  const user = req.user as UserResponseDTO;
+
+  console.log(
+    "CONTROLLER: Menerima data untuk CREATE:",
+    JSON.stringify(positionData, null, 2)
+  );
 
   try {
-    // 8. PERBAIKAN: Kirim 'positionData' DAN 'user' (objek utuh)
-    // Sesuai 'Defense' (Pertahanan) TA kita, service-lah yang
-    // akan mengambil 'user.id' dan 'user.department' dari sini.
+    // Service sudah di-update untuk set isArchived: false
     const newPosition = await jobPositionService.createPosition(
       positionData,
-      user // <-- DIUBAH (Bukan user.id)
+      user
     );
     res.status(201).json(newPosition);
   } catch (error: any) {
@@ -98,51 +100,109 @@ const createPosition = async (req: Request, res: Response) => {
 const updatePosition = async (req: Request, res: Response) => {
   try {
     const positionId = parseInt(req.params.id, 10);
-    // 9. Beri tipe data Partial (karena update mungkin tidak semua field)
     const updateData = req.body as Partial<JobPositionDTO>;
-    
+
     if (isNaN(positionId)) {
       const error: any = new Error("Invalid position ID.");
       error.status = 400;
       throw error;
     }
     
-    console.log(`CONTROLLER: Menerima data untuk UPDATE ID ${positionId}:`, JSON.stringify(updateData, null, 2));
-
+    // Service sudah di-update untuk mencegah update 'isArchived' via endpoint ini
     const updatedPosition = await jobPositionService.updatePosition(
       positionId,
       updateData
     );
     res.status(200).json(updatedPosition);
   } catch (error: any) {
-    console.error(`Controller: Error updating position with ID ${req.params.id}:`, error);
+    console.error(
+      `Controller: Error updating position with ID ${req.params.id}:`,
+      error
+    );
     handleErrorResponse(res, error);
   }
 };
 
 /**
- * Menghapus lowongan berdasarkan ID.
+ * Menghapus lowongan (Hard Delete) berdasarkan ID.
  */
 const deletePosition = async (req: Request, res: Response) => {
   try {
     const positionId = parseInt(req.params.id, 10);
-    console.log(`Controller: Received request to delete position with ID: ${positionId}`);
-
     if (isNaN(positionId)) {
       const error: any = new Error("Position ID is required for deletion.");
       error.status = 400;
       throw error;
     }
-
     const result = await jobPositionService.deletePosition(positionId);
     res.status(200).json(result);
   } catch (error: any) {
-    console.error(`Controller: Error deleting position with ID ${req.params.id}:`, error);
+    console.error(
+      `Controller: Error deleting position with ID ${req.params.id}:`,
+      error
+    );
     handleErrorResponse(res, error);
   }
 };
 
-// 10. Ubah ke ES Module export
+// --- HANDLER BARU UNTUK ARSIP ---
+
+/**
+ * Mengambil SEMUA lowongan yang DIARSIP.
+ */
+const listArchivedPositions = async (req: Request, res: Response) => {
+  console.log(
+    "Controller: Received request to list all ARCHIVED job positions."
+  );
+  try {
+    const archivedPositions = await jobPositionService.listArchivedPositions();
+    res.status(200).json(archivedPositions);
+  } catch (error: any) {
+    console.error("Controller: Error listing archived positions:", error);
+    handleErrorResponse(res, error);
+  }
+};
+
+/**
+ * Mengarsipkan lowongan (Bulk).
+ */
+const archivePositions = async (req: Request, res: Response) => {
+  const { ids } = req.body as { ids: number[] };
+  console.log(`Controller: Received request to ARCHIVE positions: ${ids}`);
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      const error: any = new Error("Array of 'ids' is required in the body.");
+      error.status = 400;
+      throw error;
+    }
+    const result = await jobPositionService.archivePositions(ids);
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error("Controller: Error archiving positions:", error);
+    handleErrorResponse(res, error);
+  }
+};
+
+/**
+ * Mengembalikan lowongan dari arsip (Bulk).
+ */
+const unarchivePositions = async (req: Request, res: Response) => {
+  const { ids } = req.body as { ids: number[] };
+  console.log(`Controller: Received request to UN-ARCHIVE positions: ${ids}`);
+  try {
+    if (!Array.isArray(ids) || ids.length === 0) {
+      const error: any = new Error("Array of 'ids' is required in the body.");
+      error.status = 400;
+      throw error;
+    }
+    const result = await jobPositionService.unarchivePositions(ids);
+    res.status(200).json(result);
+  } catch (error: any) {
+    console.error("Controller: Error un-archiving positions:", error);
+    handleErrorResponse(res, error);
+  }
+};
+
 export {
   listOpenPositions,
   listAllPositions,
@@ -150,4 +210,8 @@ export {
   createPosition,
   updatePosition,
   deletePosition,
+  // --- EKSPOR FUNGSI BARU ---
+  listArchivedPositions,
+  archivePositions,
+  unarchivePositions,
 };

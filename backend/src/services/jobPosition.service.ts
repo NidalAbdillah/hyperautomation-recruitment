@@ -1,8 +1,11 @@
 // src/services/jobPosition.service.ts
 import { JobPosition, User } from "../models";
 import { Op } from "sequelize";
-import { IJobPositionService, JobPositionDTO } from "../interfaces/IJobPositionService";
-import { UserResponseDTO } from "../interfaces/IUserService"; // Impor DTO User
+import {
+  IJobPositionService,
+  JobPositionDTO,
+} from "../interfaces/IJobPositionService";
+import { UserResponseDTO } from "../interfaces/IUserService";
 
 /**
  * Service class untuk mengelola semua logika bisnis terkait Job Positions.
@@ -10,7 +13,6 @@ import { UserResponseDTO } from "../interfaces/IUserService"; // Impor DTO User
  * @implements {IJobPositionService}
  */
 class JobPositionService implements IJobPositionService {
-  
   /**
    * Helper internal untuk membuat error standar.
    * @private
@@ -22,7 +24,7 @@ class JobPositionService implements IJobPositionService {
   }
 
   /**
-   * Mengambil semua lowongan yang "Open" dan dalam periode pendaftaran.
+   * Mengambil semua lowongan yang "Open", tidak diarsip, dan dalam periode pendaftaran.
    * @returns {Promise<JobPosition[]>}
    */
   public async getOpenPositions(): Promise<JobPosition[]> {
@@ -33,12 +35,13 @@ class JobPositionService implements IJobPositionService {
           status: "Open",
           registrationStartDate: { [Op.lte]: new Date() },
           registrationEndDate: { [Op.gte]: new Date() },
+          isArchived: false,
         },
         order: [["createdAt", "DESC"]],
         attributes: [
           "id", "name", "location", "registrationStartDate", "registrationEndDate",
           "availableSlots", "status", "createdAt", "updatedAt", "specificRequirements",
-          "announcement", "requestedById", // Pastikan semua kolom ada
+          "announcement", "requestedById", "isArchived",
         ],
       });
       return openPositions;
@@ -49,28 +52,29 @@ class JobPositionService implements IJobPositionService {
   }
 
   /**
-   * Mengambil SEMUA lowongan (termasuk Draft, Approved, dll)
+   * Mengambil SEMUA lowongan yang AKTIF (tidak diarsip) untuk admin.
    * @returns {Promise<JobPosition[]>}
    */
   public async listAllPositions(): Promise<JobPosition[]> {
-    console.log("Service: Attempting to fetch all job positions for admin.");
+    console.log("Service: Attempting to fetch all ACTIVE job positions for admin.");
     try {
-      // PENTING: Di Bab V, ini harus difilter berdasarkan 'role'
-      // Tapi untuk sekarang, kita ambil semua
       const allPositions = await JobPosition.findAll({
+        where: {
+          isArchived: false,
+        },
         order: [["createdAt", "DESC"]],
         attributes: [
           "id", "name", "location", "registrationStartDate", "registrationEndDate",
           "availableSlots", "status", "createdAt", "updatedAt", "specificRequirements",
-          "announcement", "requestedById", // Pastikan semua kolom ada
+          "announcement", "requestedById", "isArchived",
         ],
         include: [
           {
-            model: User, // <-- Kita akan ganti ini nanti, sekarang 'include' model User
-            as: 'requestor', // Sesuai 'as' di 'index.ts'
-            attributes: ['id', 'name', 'department'] // Ambil info requestor
-          }
-        ]
+            model: User,
+            as: "requestor", 
+            attributes: ["id", "name", "department"],
+          },
+        ],
       });
       return allPositions;
     } catch (error: any) {
@@ -80,14 +84,61 @@ class JobPositionService implements IJobPositionService {
   }
 
   /**
-   * Mengambil detail satu lowongan berdasarkan ID.
+   * Mengambil SEMUA lowongan yang DIARSIP (dengan SEMUA data).
+   * @returns {Promise<JobPosition[]>}
+   */
+  public async listArchivedPositions(): Promise<JobPosition[]> {
+    console.log("Service: Attempting to fetch all ARCHIVED job positions.");
+    try {
+      const archivedPositions = await JobPosition.findAll({
+        where: {
+          isArchived: true,
+        },
+        order: [["updatedAt", "DESC"]],
+        
+        // --- INI PERBAIKANNYA (DATA LENGKAP) ---
+        attributes: [
+          "id", "name", "location", "status", "createdAt", "updatedAt", "requestedById", "isArchived",
+          "registrationStartDate", // <-- DIPERLUKAN
+          "registrationEndDate", // <-- DIPERLUKAN
+          "availableSlots",      // <-- DIPERLUKAN
+          "announcement",        // <-- DIPERLUKAN
+          "specificRequirements" // <-- DIPERLUKAN
+        ],
+        // --- BATAS PERBAIKAN ---
+
+        include: [
+          {
+            model: User,
+            as: "requestor",
+            attributes: ["id", "name", "department"],
+          },
+        ],
+      });
+      return archivedPositions;
+    } catch (error: any) {
+      console.error("Service: Error fetching archived positions:", error);
+      throw new Error(`Failed to fetch archived positions: ${error.message}`);
+    }
+  }
+
+  /**
+   * Mengambil detail satu lowongan berdasarkan ID (aktif atau arsip).
    * @param {number} positionId
    * @returns {Promise<JobPosition | null>}
    */
   public async getPositionById(positionId: number): Promise<JobPosition | null> {
     console.log(`Service: Attempting to fetch position with ID: ${positionId}`);
     try {
-      const position = await JobPosition.findByPk(positionId);
+      const position = await JobPosition.findByPk(positionId, {
+         // --- PERBAIKAN DI SINI JUGA ---
+         // Pastikan getById juga mengambil semua data
+         attributes: [
+          "id", "name", "location", "registrationStartDate", "registrationEndDate",
+          "availableSlots", "status", "createdAt", "updatedAt", "specificRequirements",
+          "announcement", "requestedById", "isArchived",
+        ],
+      });
       if (!position) {
         console.warn(`Service: Position with ID ${positionId} not found.`);
         throw this._createError(`Position with ID ${positionId} not found.`, 404);
@@ -102,36 +153,28 @@ class JobPositionService implements IJobPositionService {
 
   /**
    * Membuat lowongan baru.
-   * @param {JobPositionDTO} positionData - Data dari form (Nama, Lokasi, Syarat)
-   * @param {UserResponseDTO} requestor - Objek user (Manager) yang membuat request
+   * @param {JobPositionDTO} positionData
+   * @param {UserResponseDTO} requestor
    * @returns {Promise<JobPosition>}
    */
-  // --- PERBAIKAN DI SINI ---
-  // Sekarang menerima 2 argumen, sesuai "Kontrak" (Interface) dan "Pemanggil" (Controller)
   public async createPosition(
     positionData: JobPositionDTO,
     requestor: UserResponseDTO
   ): Promise<JobPosition> {
-  // --- BATAS PERBAIKAN ---
-
     console.log("Service: Attempting to create new job position.");
     try {
-      
-      // Ini adalah "Defense" (Pertahanan) TA Anda:
-      // Kita gabungkan data dari Form (positionData) dengan
-      // data otomatis dari 'requestor' (user yang login)
       const dataToCreate = {
         ...positionData,
-        status: "Draft", // Status default saat Manager request
-        requestedById: requestor.id, // Menyimpan SIAPA yang me-request
-        // 'announcement' (pemanis) dan tanggal sengaja dibiarkan null
+        status: "Draft",
+        requestedById: requestor.id,
+        isArchived: false,
       };
 
       const newPosition = await JobPosition.create(dataToCreate as any);
       console.log(`Service: New position created with ID: ${newPosition.id} by User ID: ${requestor.id}`);
       return newPosition;
-      
     } catch (error: any) {
+      // (Error handling tetap sama)
       console.error("Service: Error creating new position:", error);
       if (error.name === "SequelizeValidationError") {
         const validationErrors = error.errors.map((err: any) => err.message);
@@ -151,8 +194,8 @@ class JobPositionService implements IJobPositionService {
 
   /**
    * Memperbarui lowongan yang ada berdasarkan ID.
-   * @param {number} positionId - ID lowongan
-   * @param {Partial<JobPositionDTO>} updateData - Data yang akan diperbarui
+   * @param {number} positionId
+   * @param {Partial<JobPositionDTO>} updateData
    * @returns {Promise<JobPosition>}
    */
   public async updatePosition(
@@ -167,18 +210,18 @@ class JobPositionService implements IJobPositionService {
         console.warn(`Service: Position with ID ${positionId} not found for update.`);
         throw this._createError(`Position with ID ${positionId} not found.`, 404);
       }
-
-      // Ini adalah "Defense" (Pertahanan) TA Anda untuk "Pemanis" (Sweetener):
-      // Saat Staff HR menekan "Publish", dia akan memanggil 'updatePosition'
-      // dengan 'updateData' berisi:
-      // { announcement: "...", registrationStartDate: "...", status: "Open" }
       
+      if ((updateData as any).isArchived) {
+        delete (updateData as any).isArchived;
+      }
+
       await position.update(updateData);
       console.log(`Service: Position with ID ${positionId} updated successfully.`);
 
       await position.reload();
       return position;
     } catch (error: any) {
+      // (Error handling tetap sama)
       console.error(`Service: Error updating position with ID ${positionId}:`, error);
       if (error.name === "SequelizeValidationError") {
          const validationErrors = error.errors.map((err: any) => err.message);
@@ -186,26 +229,26 @@ class JobPositionService implements IJobPositionService {
          validationError.status = 400;
          validationError.errors = validationErrors;
          throw validationError;
-      }
-      if (error.name === "SequelizeUniqueConstraintError") {
+       }
+       if (error.name === "SequelizeUniqueConstraintError") {
          const uniqueError: any = new Error(`Position with this name already exists.`);
          uniqueError.status = 409;
          throw uniqueError;
-      }
-      if (error.status) {
-        throw error;
-      }
-      throw new Error(`Failed to update position: ${error.message}`);
+       }
+       if (error.status) {
+         throw error;
+       }
+       throw new Error(`Failed to update position: ${error.message}`);
     }
   }
 
   /**
-   * Menghapus lowongan berdasarkan ID.
-   * @param {number} positionId - ID lowongan.
+   * Menghapus lowongan (hard delete) berdasarkan ID.
+   * @param {number} positionId
    * @returns {Promise<{ success: true; message: string }>}
    */
   public async deletePosition(positionId: number): Promise<{ success: true; message: string }> {
-    console.log(`Service: Attempting to delete position with ID: ${positionId}`);
+    console.log(`Service: Attempting to HARD DELETE position with ID: ${positionId}`);
     try {
       const deletedRowCount = await JobPosition.destroy({
         where: { id: positionId },
@@ -228,7 +271,7 @@ class JobPositionService implements IJobPositionService {
   }
 
   /**
-   * Menghitung jumlah lowongan yang "Open".
+   * Menghitung jumlah lowongan yang "Open" dan tidak diarsip.
    * @returns {Promise<number>}
    */
   public async countOpenPositions(): Promise<number> {
@@ -239,6 +282,7 @@ class JobPositionService implements IJobPositionService {
           status: "Open",
           registrationStartDate: { [Op.lte]: new Date() },
           registrationEndDate: { [Op.gte]: new Date() },
+          isArchived: false,
         },
       });
       console.log(`Service: Counted ${count} open positions.`);
@@ -248,7 +292,87 @@ class JobPositionService implements IJobPositionService {
       throw new Error(`Failed to count open job positions: ${error.message}`);
     }
   }
-} // <-- Penutup Class
 
-// Ekspor satu instance (singleton) dari class
+  /**
+   * Mengarsipkan lowongan (soft delete). Hanya yang status 'Closed'.
+   * @param {number[]} positionIds
+   * @returns {Promise<{ count: number; message: string }>}
+   */
+  public async archivePositions(
+    positionIds: number[]
+  ): Promise<{ count: number; message: string }> {
+    console.log(
+      `Service: Attempting to archive positions: ${positionIds.join(", ")}`
+    );
+    if (!Array.isArray(positionIds) || positionIds.length === 0) {
+      return { count: 0, message: "No position IDs provided." };
+    }
+
+    try {
+      const [updateCount] = await JobPosition.update(
+        { isArchived: true },
+        {
+          where: {
+            id: { [Op.in]: positionIds },
+            status: "Closed", 
+            isArchived: false,
+          },
+        }
+      );
+
+      console.log(`Service: Successfully archived ${updateCount} positions.`);
+      return {
+        count: updateCount,
+        message: `${updateCount} positions were successfully archived.`,
+      };
+    } catch (error: any) {
+      console.error("Service: Error archiving positions:", error);
+      throw this._createError(
+        `Failed to archive positions: ${error.message}`,
+        500
+      );
+    }
+  }
+
+  /**
+   * Mengembalikan lowongan dari arsip.
+   * @param {number[]} positionIds
+   * @returns {Promise<{ count: number; message: string }>}
+   */
+  public async unarchivePositions(
+    positionIds: number[]
+  ): Promise<{ count: number; message: string }> {
+    console.log(
+      `Service: Attempting to UN-archive positions: ${positionIds.join(", ")}`
+    );
+    if (!Array.isArray(positionIds) || positionIds.length === 0) {
+      return { count: 0, message: "No position IDs provided." };
+    }
+
+    try {
+      const [updateCount] = await JobPosition.update(
+        { isArchived: false },
+        {
+          where: {
+            id: { [Op.in]: positionIds },
+            isArchived: true, 
+          },
+        }
+      );
+
+      console.log(`Service: Successfully un-archived ${updateCount} positions.`);
+      return {
+        count: updateCount,
+        message: `${updateCount} positions were successfully un-archived.`,
+      };
+    } catch (error: any) {
+      console.error("Service: Error un-archiving positions:", error);
+      throw this._createError(
+        `Failed to un-archive positions: ${error.message}`,
+        500
+      );
+    }
+  }
+}
+
 export default new JobPositionService();

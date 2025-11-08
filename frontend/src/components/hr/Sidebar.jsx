@@ -120,8 +120,8 @@ const mainMenuItems = [
       allowedRoles: ["head_hr", "staff_hr", "manager"]
     },
     { 
-      path: "/hr/archived-cvs", 
-      label: "Archived Data", 
+      path: "/hr/archived", 
+      label: "Archived Center", 
       icon: Archive, 
       gradient: "from-[#1e3b5c] to-[#2c5f8d]",
       hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",

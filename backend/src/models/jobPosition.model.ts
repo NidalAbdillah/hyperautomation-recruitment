@@ -1,6 +1,7 @@
-// backend/src/models/jobPosition.model.ts
+// src/models/jobPosition.model.ts
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database";
+import User from "./user.model"; // <-- (Pastikan User di-import jika belum)
 
 type JobStatus = "Draft" | "Open" | "Closed" | "Approved" | "Rejected";
 
@@ -15,13 +16,30 @@ interface JobPositionAttributes {
   status: JobStatus;
   announcement: string | null;
   requestedById: number | null;
+  isArchived: boolean; // <-- 1. TAMBAHKAN DI SINI
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
 
-interface JobPositionCreationAttributes extends Optional<JobPositionAttributes, "id" | "specificRequirements" | "availableSlots" | "status" | "createdAt" | "updatedAt" | "registrationStartDate" | "registrationEndDate"> {}
+// --- 2. TAMBAHKAN 'isArchived' DI SINI agar opsional saat pembuatan ---
+interface JobPositionCreationAttributes
+  extends Optional<
+    JobPositionAttributes,
+    | "id"
+    | "specificRequirements"
+    | "availableSlots"
+    | "status"
+    | "createdAt"
+    | "updatedAt"
+    | "registrationStartDate"
+    | "registrationEndDate"
+    | "isArchived" // <-- Tambahkan ini
+  > {}
 
-class JobPosition extends Model<JobPositionAttributes, JobPositionCreationAttributes> implements JobPositionAttributes {
+class JobPosition
+  extends Model<JobPositionAttributes, JobPositionCreationAttributes>
+  implements JobPositionAttributes
+{
   public id!: number;
   public name!: string;
   public location!: string;
@@ -32,9 +50,13 @@ class JobPosition extends Model<JobPositionAttributes, JobPositionCreationAttrib
   public status!: JobStatus;
   public announcement!: string | null;
   public requestedById!: number | null;
+  public isArchived!: boolean; // <-- 3. TAMBAHKAN DI SINI
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+  
+  // (Definisi asosiasi jika Anda menggunakannya di dalam model)
+  public readonly requestor?: User; 
 }
 
 JobPosition.init(
@@ -48,13 +70,12 @@ JobPosition.init(
     name: {
       type: DataTypes.STRING,
       allowNull: false,
-      // unique: true, // <-- 1. HAPUS DARI SINI
-      comment: "Nama atau judul posisi pekerjaan, contoh: Backend Developer (JavaScript)",
+      comment: "Nama atau judul posisi pekerjaan",
     },
     location: {
       type: DataTypes.STRING,
       allowNull: false,
-      comment: "Lokasi pekerjaan, contoh: Remote, Onsite (Bandung)",
+      comment: "Lokasi pekerjaan",
     },
     registrationStartDate: {
       type: DataTypes.DATE,
@@ -69,7 +90,7 @@ JobPosition.init(
     specificRequirements: {
       type: DataTypes.TEXT,
       allowNull: true,
-      comment: "Persyaratan spesifik untuk posisi ini (dalam format teks)",
+      comment: "Persyaratan spesifik untuk posisi ini (internal)",
     },
     availableSlots: {
       type: DataTypes.INTEGER,
@@ -81,20 +102,28 @@ JobPosition.init(
       comment: "Jumlah slot yang tersedia untuk posisi ini",
     },
     status: {
-      type: DataTypes.ENUM("Draft", "Open", "Closed"),
+      // Perbarui ENUM Anda agar mencakup semua status
+      type: DataTypes.ENUM("Draft", "Open", "Closed", "Approved", "Rejected"),
       allowNull: false,
       defaultValue: "Draft",
-      comment: 'Status posisi pekerjaan (Draft, Open, Closed). Hanya "Open" yang tampil di publik.',
+      comment: "Status posisi pekerjaan",
     },
     announcement: {
       type: DataTypes.TEXT,
       allowNull: true,
-      comment: "Pengumuman terkait posisi pekerjaan ini (dalam format teks)",
+      comment: "Pengumuman/konten publik untuk lowongan",
     },
     requestedById: {
       type: DataTypes.INTEGER,
       allowNull: true,
       comment: "ID pengguna yang mengajukan posisi pekerjaan ini",
+    },
+    // --- 4. TAMBAHKAN DEFINISI KOLOM INI ---
+    isArchived: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      comment: "Flag untuk soft delete (arsip)"
     },
   },
   {
@@ -102,15 +131,12 @@ JobPosition.init(
     tableName: "job_positions",
     timestamps: true,
     comment: "Tabel untuk menyimpan data posisi pekerjaan yang dibuka",
-    
-    // --- 2. TAMBAHKAN BLOK 'indexes' INI ---
-    // Ini adalah cara OOP yang benar untuk `unique: true`
     indexes: [
       {
         unique: true,
-        fields: ['name']
-      }
-    ]
+        fields: ["name"],
+      },
+    ],
   }
 );
 

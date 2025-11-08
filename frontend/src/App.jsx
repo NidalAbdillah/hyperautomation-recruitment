@@ -13,7 +13,7 @@ import Login from "./pages/Login.jsx";
 import DashboardPage from "./pages/hr/Dashboard.jsx";
 import ManageUsersPage from "./pages/hr/ManageUsersPage.jsx";
 import ManageCVsPage from "./pages/hr/ManageCVsPage.jsx";
-import ManageArchivedCVsPage from "./pages/hr/ManageArchivedCVsPage.jsx";
+import ArchiveCenterPage from "./pages/hr/ArchiveCenterPage.jsx";
 import ManageJobPositionsPage from "./pages/hr/ManageJobPositionsPage.jsx";
 import TopRankingPage from "./pages/hr/TopRankingPage.jsx";
 
@@ -95,7 +95,7 @@ function App() {
           <Route path="manage-cv" element={<ManageCVsPage />} />
           <Route path="top-ranking" element={<TopRankingPage />} />
           <Route path="schedule-interview" element={<InterviewSchedulePage />} />
-          <Route path="archived-cvs" element={<ManageArchivedCVsPage />} />
+          <Route path="archived" element={<ArchiveCenterPage />} />
           
           {/* Grup 3: Manajemen Lowongan (Sesuai Alur 3-Status) */}
           <Route path="request-position" element={<RequestPositionPage />} />
