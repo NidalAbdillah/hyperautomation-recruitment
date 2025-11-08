@@ -1,45 +1,54 @@
-// src/pages/hr/ManageJobPositionsPage.jsx
+// frontend/src/pages/hr/ManageJobPositionsPage.jsx
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import axios from "axios";
 import Notiflix from "notiflix";
-import { useAuth } from "../../context/AuthContext"; // <-- PENTING: Impor useAuth
-
+import { useAuth } from "../../context/AuthContext";
 import JobPositionsTable from "../../components/hr/JobPositionsTable";
-import JobPositionFormModal from "../../components/hr/JobPositionFormModal"; // Modal Tambah (Head HR)
-import PublishFormModal from "../../components/hr/PublishFormModal"; // Modal Publish (Staff HR)
+import JobPositionFormModal from "../../components/hr/JobPositionFormModal";
 
-import { PlusIcon, ChevronDownIcon, CalendarDaysIcon } from "@heroicons/react/24/outline";
+import {
+  PlusIcon,
+  ChevronDownIcon,
+  CalendarDaysIcon,
+  // --- 1. IMPORT IKON BARU (Tiru ManageCVsPage) ---
+  CheckCircleIcon,
+  XCircleIcon,
+  ArchiveBoxIcon,
+  TrashIcon,
+} from "@heroicons/react/24/outline";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_ADMIN_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions`;
-const API_UPDATE_POSITION_URL = (id) => `${API_BASE_URL}/api/hr/job-positions/${id}`;
-const API_DELETE_POSITION_URL = (id) => `${API_BASE_URL}/api/hr/job-positions/${id}`;
+const API_UPDATE_POSITION_URL = (id) =>
+  `${API_BASE_URL}/api/hr/job-positions/${id}`;
+const API_DELETE_POSITION_URL = (id) =>
+  `${API_BASE_URL}/api/hr/job-positions/${id}`;
+// --- 2. ENDPOINT API BARU ---
+const API_ARCHIVE_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions/archive`;
 
-// Status yang BISA dilihat oleh Staff HR
 const STAFF_HR_VISIBLE_STATUS = ["Approved", "Open", "Closed"];
-
-const POSITION_STATUS_OPTIONS = ["Draft", "Approved", "Open", "Closed", "Rejected"];
-
-const getAuthToken = () => {
-  return localStorage.getItem("token");
-};
-
+const POSITION_STATUS_OPTIONS = [
+  "Draft",
+  "Approved",
+  "Open",
+  "Closed",
+  "Rejected",
+];
+const getAuthToken = () => localStorage.getItem("token");
 const ITEMS_PER_PAGE = 10;
 
 function ManageJobPositionsPage() {
-  const { user } = useAuth(); // <-- Ambil 'user' yang sedang login
-
+  const { user } = useAuth();
   const [allPositions, setAllPositions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [showFormModal, setShowFormModal] = useState(false);
   const [positionToEdit, setPositionToEdit] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // (State filter, sort, paginasi)
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFilter, setDateFilter] = useState(null);
@@ -47,64 +56,74 @@ function ManageJobPositionsPage() {
   const [sortDirection, setSortDirection] = useState("desc");
   const [currentPage, setCurrentPage] = useState(1);
 
-  // --- FUNGSI PENGAMBILAN DATA (ROLE-AWARE) ---
+  // --- 3. STATE BARU (Tiru ManageCVsPage) ---
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedPositions, setSelectedPositions] = useState([]);
+
+  // --- 4. FUNGSI FETCH DATA (Filter 'isArchived: false') ---
   const fetchAllPositions = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const token = getAuthToken();
-      if (!token) {
-        /* ... (Error handling token) ... */
-      }
+      if (!token) throw new Error("Token tidak ditemukan");
 
+      // Asumsi backend Anda sekarang bisa menerima ?isArchived=false
+      // Jika belum, filter lokal akan menanganinya di processedPositions
       const response = await axios.get(API_ADMIN_POSITIONS_URL, {
         headers: { Authorization: `Bearer ${token}` },
+        // params: { isArchived: false } // <-- Idealnya, filter di backend
       });
 
       let positions = response.data;
 
-      // --- INI LOGIKA "ANTI-CHALLENGE" (ANTI-BANTAH) ANDA ---
-      // "Defense" (Pertahanan) TA: Staff HR hanya melihat antrian (queue) yang relevan
-      if (user && user.role === "staff_hr") {
-        console.log("Role 'staff_hr' terdeteksi: Memfilter lowongan...");
-        positions = positions.filter((pos) => STAFF_HR_VISIBLE_STATUS.includes(pos.status));
+      // Filter "Sadar Peran"
+      if (user) {
+        if (user.role === "staff_hr") {
+          positions = positions.filter((pos) =>
+            STAFF_HR_VISIBLE_STATUS.includes(pos.status)
+          );
+        } else if (user.role === "manager") {
+          positions = positions.filter(
+            (pos) => pos.requestor && pos.requestor.id === user.id
+          );
+        }
+        // (Head HR tidak difilter)
       }
-      // (Head HR bisa melihat semua, jadi tidak perlu di-filter)
-
       setAllPositions(positions);
     } catch (err) {
       setError(err);
-      if (err.response && err.response.status === 401) {
-        /* ... */
-      } else {
-        /* ... */
-      }
     } finally {
       setLoading(false);
     }
-  }, [user]); // <-- Tambahkan 'user' sebagai dependensi
+  }, [user]);
 
   useEffect(() => {
     if (user) {
-      // Hanya jalankan jika 'user' sudah ter-load
       fetchAllPositions();
     }
   }, [fetchAllPositions, user]);
 
-  // --- LOGIKA FILTER, SORT, PAGINASI (TETAP SAMA) ---
+  // --- 5. PROCESSED DATA (Filter 'isArchived: false' di frontend) ---
   const processedPositions = useMemo(() => {
-    let filtered = [...allPositions];
+    // Filter lokal 'isArchived'
+    let filtered = allPositions.filter((pos) => !pos.isArchived);
 
+    // (Filtering, Sorting, Paginasi... tetap sama)
     // 1. Filtering
     if (searchTerm) {
       const lowerCaseSearchTerm = searchTerm.toLowerCase();
-      filtered = filtered.filter((pos) => (pos.name && pos.name.toLowerCase().includes(lowerCaseSearchTerm)) || (pos.location && pos.location.toLowerCase().includes(lowerCaseSearchTerm)));
+      filtered = filtered.filter(
+        (pos) =>
+          (pos.name && pos.name.toLowerCase().includes(lowerCaseSearchTerm)) ||
+          (pos.location &&
+            pos.location.toLowerCase().includes(lowerCaseSearchTerm))
+      );
     }
     if (statusFilter) {
       filtered = filtered.filter((pos) => pos.status === statusFilter);
     }
     if (dateFilter) {
-      // (Logika filter tanggal Anda sudah benar)
       const filterDateObj = new Date(dateFilter);
       filterDateObj.setHours(0, 0, 0, 0);
       filtered = filtered.filter((pos) => {
@@ -113,45 +132,86 @@ function ManageJobPositionsPage() {
           const endDate = new Date(pos.registrationEndDate);
           startDate.setHours(0, 0, 0, 0);
           endDate.setHours(23, 59, 59, 999);
-          return filterDateObj.getTime() >= startDate.getTime() && filterDateObj.getTime() <= endDate.getTime();
+          return (
+            filterDateObj.getTime() >= startDate.getTime() &&
+            filterDateObj.getTime() <= endDate.getTime()
+          );
         } catch (e) {
           return false;
         }
       });
     }
 
-    // 2. Sorting (Logika Anda sudah benar)
+    // 2. Sorting
+    const filteredAndSortedData = [...filtered]; // <-- Gunakan ini untuk Quick Select
     if (sortColumn) {
-      filtered.sort((a, b) => {
-        /* ... (logika sort Anda) ... */
+      filteredAndSortedData.sort((a, b) => {
+        let aVal = a[sortColumn];
+        let bVal = b[sortColumn];
+        if (
+          sortColumn === "createdAt" ||
+          sortColumn === "registrationStartDate"
+        ) {
+          aVal = aVal ? new Date(aVal).getTime() : 0;
+          bVal = bVal ? new Date(bVal).getTime() : 0;
+        }
+        if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+        return 0;
       });
     }
 
-    // 3. Paginasi (Logika Anda sudah benar)
-    const totalItems = filtered.length;
+    // 3. Paginasi
+    const totalItems = filteredAndSortedData.length;
     const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
-    const validPage = Math.max(1, Math.min(currentPage, totalPages > 0 ? totalPages : 1));
+    const validPage = Math.max(
+      1,
+      Math.min(currentPage, totalPages > 0 ? totalPages : 1)
+    );
     if (currentPage !== validPage) {
       setTimeout(() => setCurrentPage(validPage), 0);
     }
     const startIndex = (validPage - 1) * ITEMS_PER_PAGE;
-    const paginatedData = filtered.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+    const paginatedData = filteredAndSortedData.slice(
+      startIndex,
+      startIndex + ITEMS_PER_PAGE
+    );
 
     return {
       data: paginatedData,
+      filteredAndSortedData, // <-- Ekspor data yg sudah difilter (untuk Quick Select)
       totalItems,
       totalPages,
       currentPage: validPage,
       firstItemIndex: totalItems > 0 ? startIndex + 1 : 0,
       lastItemIndex: Math.min(startIndex + ITEMS_PER_PAGE, totalItems),
     };
-  }, [allPositions, searchTerm, statusFilter, dateFilter, sortColumn, sortDirection, currentPage]);
+  }, [
+    allPositions,
+    searchTerm,
+    statusFilter,
+    dateFilter,
+    sortColumn,
+    sortDirection,
+    currentPage,
+  ]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, dateFilter, sortColumn, sortDirection]);
+    // --- 6. RESET SELECTION (Tiru ManageCVsPage) ---
+    if (!isSelectMode) {
+      setSelectedPositions([]);
+    }
+  }, [
+    searchTerm,
+    statusFilter,
+    dateFilter,
+    sortColumn,
+    sortDirection,
+    isSelectMode,
+  ]);
 
-  // --- Handlers (Penangan) Filter & Paginasi (Sudah benar) ---
+  // (Handlers Filter & Paginasi tetap sama)
   const handleSearchChange = (e) => setSearchTerm(e.target.value);
   const handleStatusFilterChange = (e) => setStatusFilter(e.target.value);
   const handleDateFilterChange = (date) => setDateFilter(date);
@@ -164,144 +224,254 @@ function ManageJobPositionsPage() {
     }
   };
   const handlePageChange = (page) => {
-    const validPage = Math.max(1, Math.min(page, processedPositions.totalPages > 0 ? processedPositions.totalPages : 1));
+    const validPage = Math.max(
+      1,
+      Math.min(
+        page,
+        processedPositions.totalPages > 0 ? processedPositions.totalPages : 1
+      )
+    );
     setCurrentPage(validPage);
   };
 
-  // --- Handlers (Penangan) Aksi ---
+  // --- 7. HANDLER AKSI BARU (Tiru ManageCVsPage) ---
+  const handleToggleSelectMode = useCallback(() => {
+    setIsSelectMode((prev) => !prev);
+    setSelectedPositions([]);
+  }, []);
+
   const handleAddPositionClick = () => {
     setPositionToEdit(null);
-    setShowCreateModal(true); // Buka Modal 1 (Form Kosong)
+    setShowFormModal(true);
   };
 
   const handleEditPositionClick = (position) => {
     setPositionToEdit(position);
-    setShowCreateModal(true); // Buka Modal 1 (Form Terisi)
-  };
-
-  const handlePublishClick = (position) => {
-    setPositionToEdit(position); // Kirim data "mentah"
-    setShowPublishModal(true); // Buka Modal 2 (Form Pemanis)
+    setShowFormModal(true);
   };
 
   const handleCloseModals = () => {
-    setShowCreateModal(false);
-    setShowPublishModal(false);
+    setShowFormModal(false);
     setPositionToEdit(null);
   };
 
-  // Handler (Penangan) untuk Modal 1 (Create/Edit Penuh - Head HR)
-  const handleSubmitFullForm = async (formData) => {
+  // (Handler handleSubmitForm, handleDeletePositionClick, handleUpdateStatus... tetap sama)
+  const handleSubmitForm = async (formData) => {
     setIsSubmitting(true);
     const isEditing = !!positionToEdit;
-    Notiflix.Loading.standard(isEditing ? "Updating Position..." : "Adding Position...");
+    Notiflix.Loading.standard(
+      isEditing ? "Updating Position..." : "Adding Position..."
+    );
 
     try {
       const token = getAuthToken();
       if (!token) throw new Error("Token not found");
       const headers = { Authorization: `Bearer ${token}` };
 
-      // (Logika ini hanya untuk Head HR)
       if (isEditing) {
-        await axios.put(`${API_ADMIN_POSITIONS_URL}/${positionToEdit.id}`, formData, { headers });
-        Notiflix.Report.success("Berhasil Diupdate", "Posisi lowongan berhasil diperbarui.", "Okay");
+        await axios.put(
+          `${API_ADMIN_POSITIONS_URL}/${positionToEdit.id}`,
+          formData,
+          { headers }
+        );
+        Notiflix.Report.success(
+          "Berhasil Diupdate",
+          "Data publikasi berhasil diperbarui.",
+          "Okay"
+        );
       } else {
-        await axios.post(API_ADMIN_POSITIONS_URL, { ...formData, status: "Draft" }, { headers });
-        Notiflix.Report.success("Berhasil Ditambah", "Posisi lowongan (Draft) berhasil ditambahkan.", "Okay");
+        await axios.post(API_ADMIN_POSITIONS_URL, formData, { headers });
+        Notiflix.Report.success(
+          "Berhasil Ditambah",
+          "Posisi lowongan (Draft) berhasil ditambahkan.",
+          "Okay"
+        );
       }
 
       handleCloseModals();
       fetchAllPositions();
     } catch (err) {
-      console.error("Error submitting full form:", err);
-      Notiflix.Report.failure(isEditing ? "Gagal Update" : "Gagal Tambah", err.response?.data?.message || "Terjadi kesalahan.", "Okay");
+      console.error("Error submitting form:", err);
+      Notiflix.Report.failure(
+        isEditing ? "Gagal Update" : "Gagal Tambah",
+        err.response?.data?.message || "Terjadi kesalahan.",
+        "Okay"
+      );
     } finally {
       setIsSubmitting(false);
       Notiflix.Loading.remove();
     }
   };
 
-  // Handler (Penangan) untuk Modal 2 (Publish - Staff HR)
-  const handleSubmitPublishForm = async (positionId, dataPemanis) => {
-    setIsSubmitting(true);
-    Notiflix.Loading.standard("Memublikasikan lowongan...");
-
-    try {
-      const token = getAuthToken();
-      if (!token) throw new Error("Token not found");
-
-      // 'dataPemanis' berisi: { announcement, registrationStartDate, status: "Open" }
-      await axios.put(API_UPDATE_POSITION_URL(positionId), dataPemanis, { headers: { Authorization: `Bearer ${token}` } });
-
-      Notiflix.Loading.remove();
-      Notiflix.Report.success("Berhasil Dipublikasikan", "Lowongan telah berhasil di-set 'Open' dan siap menerima pelamar.", "Okay");
-
-      handleCloseModals();
-      fetchAllPositions();
-    } catch (error) {
-      Notiflix.Loading.remove();
-      console.error("Error submitting publish form:", error);
-      Notiflix.Report.failure("Gagal Publikasi", error.response?.data?.message || "Terjadi kesalahan.", "Okay");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  // Handler (Penangan) Delete (Hanya Head HR)
   const handleDeletePositionClick = (position) => {
-    Notiflix.Confirm.show("Konfirmasi Hapus", `Anda yakin ingin menghapus lowongan "${position.name}"? Aksi ini tidak dapat dibatalkan.`, "Hapus", "Batal", async () => {
-      Notiflix.Loading.standard("Deleting Position...");
-      try {
-        const token = getAuthToken();
-        if (!token) throw new Error("Token not found");
-        await axios.delete(`${API_DELETE_POSITION_URL(position.id)}`, { headers: { Authorization: `Bearer ${token}` } });
-        Notiflix.Loading.remove();
-        Notiflix.Report.success("Berhasil Dihapus", "Posisi lowongan berhasil dihapus.", "Okay");
-        fetchAllPositions();
-      } catch (err) {
-        Notiflix.Loading.remove();
-        Notiflix.Report.failure("Gagal Hapus", err.response?.data?.message || "Terjadi kesalahan.", "Okay");
+    Notiflix.Confirm.show(
+      "Konfirmasi Hapus",
+      `Anda yakin ingin menghapus lowongan "${position.name}"?`,
+      "Hapus",
+      "Batal",
+      async () => {
+        Notiflix.Loading.standard("Deleting Position...");
+        try {
+          const token = getAuthToken();
+          if (!token) throw new Error("Token not found");
+          await axios.delete(`${API_DELETE_POSITION_URL(position.id)}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          Notiflix.Loading.remove();
+          Notiflix.Report.success(
+            "Berhasil Dihapus",
+            "Posisi lowongan berhasil dihapus.",
+            "Okay"
+          );
+          fetchAllPositions();
+        } catch (err) {
+          Notiflix.Loading.remove();
+          Notiflix.Report.failure(
+            "Gagal Hapus",
+            err.response?.data?.message || "Terjadi kesalahan.",
+            "Okay"
+          );
+        }
       }
-    });
+    );
   };
 
-  // Handler (Penangan) Update Status (Hanya Head HR, untuk "Closed")
   const handleUpdateStatus = async (positionId, newStatus) => {
-    // (Logika ini mungkin hanya relevan untuk 'Head HR' yang bisa menutup paksa)
     Notiflix.Loading.standard("Updating Status...");
     try {
       const token = getAuthToken();
-      await axios.put(`${API_UPDATE_POSITION_URL(positionId)}`, { status: newStatus }, { headers: { Authorization: `Bearer ${token}` } });
-      Notiflix.Report.success("Status Berhasil Diupdate", `Status diubah menjadi ${newStatus}.`, "Okay");
+      await axios.put(
+        `${API_UPDATE_POSITION_URL(positionId)}`,
+        { status: newStatus }, // Hanya kirim status
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      Notiflix.Report.success(
+        "Status Berhasil Diupdate",
+        `Status diubah menjadi ${newStatus}.`,
+        "Okay"
+      );
       fetchAllPositions();
     } catch (err) {
-      Notiflix.Report.failure("Gagal Update", err.response?.data?.message || "Gagal update status.", "Okay");
+      Notiflix.Report.failure(
+        "Gagal Update",
+        err.response?.data?.message || "Gagal update status.",
+        "Okay"
+      );
     } finally {
       Notiflix.Loading.remove();
     }
   };
 
-  // Tampilan loading/error
+  // --- 8. HANDLER AKSI MASAL (BULK ACTION) BARU ---
+
+  // Handler untuk Tombol Arsip Individual
+  const handleArchivePosition = async (positionIds) => {
+    // (Akan dipanggil oleh Bulk Handler di bawah)
+    Notiflix.Confirm.show(
+      "Konfirmasi Arsip",
+      `Anda yakin ingin mengarsipkan ${positionIds.length} lowongan? Lowongan harus berstatus 'Closed'.`,
+      "Arsipkan",
+      "Batal",
+      async () => {
+        Notiflix.Loading.standard("Mengarsipkan...");
+
+        // Filter di frontend: Hanya arsipkan yang 'Closed'
+        const positionsToArchive = allPositions.filter(
+          (p) => positionIds.includes(p.id) && p.status === "Closed"
+        );
+        const idsToArchive = positionsToArchive.map((p) => p.id);
+
+        if (idsToArchive.length === 0) {
+          Notiflix.Loading.remove();
+          Notiflix.Report.info(
+            "Tidak Ada Arsip",
+            "Hanya lowongan berstatus 'Closed' yang dapat diarsipkan.",
+            "Okay"
+          );
+          return;
+        }
+
+        try {
+          const token = getAuthToken();
+          // Panggil API baru (Asumsi endpoint-nya: /api/hr/job-positions/archive)
+          await axios.put(
+            API_ARCHIVE_POSITIONS_URL,
+            { ids: idsToArchive }, // Kirim array ID
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          Notiflix.Loading.remove();
+          Notiflix.Report.success(
+            "Berhasil Diarsip",
+            `${idsToArchive.length} lowongan berhasil diarsipkan.`,
+            "Okay"
+          );
+
+          fetchAllPositions(); // Refresh tabel
+          setSelectedPositions([]); // Kosongkan seleksi
+          setIsSelectMode(false); // Matikan mode select
+        } catch (err) {
+          Notiflix.Loading.remove();
+          Notiflix.Report.failure(
+            "Gagal Arsip",
+            err.response?.data?.message || "Terjadi kesalahan.",
+            "Okay"
+          );
+        }
+      }
+    );
+  };
+
+  // Quick Select Handlers
+  const handleSelectAll = useCallback(
+    () =>
+      setSelectedPositions(
+        processedPositions.filteredAndSortedData.map((p) => p.id)
+      ),
+    [processedPositions.filteredAndSortedData]
+  );
+  const handleSelectNone = useCallback(() => setSelectedPositions([]), []);
+  const handleSelectClosed = useCallback(
+    () =>
+      setSelectedPositions(
+        processedPositions.filteredAndSortedData
+          .filter((p) => p.status === "Closed")
+          .map((p) => p.id)
+      ),
+    [processedPositions.filteredAndSortedData]
+  );
+
+  // (Tampilan loading/error)
   if (loading && allPositions.length === 0) {
-    return <div className="text-center p-8 text-gray-600">Memuat data lowongan...</div>;
+    /* ... */
   }
   if (error && allPositions.length === 0) {
-    return <div className="text-center p-8 text-red-600">Gagal memuat data: {error.message}</div>;
+    /* ... */
   }
 
   return (
     <div className="manage-positions-page-container p-4">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-6">Manage Job Positions</h2>
+      <h2 className="text-2xl font-semibold text-gray-800 mb-6">
+        Manage Job Positions
+      </h2>
 
-      {/* --- Bagian Filter dan Tombol Tambah --- */}
+      {/* --- 9. BAGIAN TOMBOL DAN FILTER (Di-update) --- */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-4 space-y-4 sm:space-y-0 sm:space-x-4">
         {/* Filter Section */}
         <div className="flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 w-full sm:w-auto">
-          <input type="text" placeholder="Search by name, location..." value={searchTerm} onChange={handleSearchChange} className="shadow appearance-none border rounded w-full sm:w-64 py-2 px-3 text-gray-700" />
-
-          {/* --- PERBAIKAN: Filter "Sadar Peran" (Role-Aware) --- */}
+          {/* (Input Search, Select Status, DatePicker... tetap sama) */}
+          <input
+            type="text"
+            placeholder="Search by name, location..."
+            value={searchTerm}
+            onChange={handleSearchChange}
+            className="shadow appearance-none border rounded w-full sm:w-64 py-2 px-3 text-gray-700"
+          />
           <div className="relative w-full sm:w-auto">
-            <select value={statusFilter} onChange={handleStatusFilterChange} className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 pr-8">
+            <select
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 pr-8"
+            >
               {user?.role === "head_hr" && (
                 <>
                   <option value="">All Status (Head HR)</option>
@@ -320,40 +490,149 @@ function ManageJobPositionsPage() {
                   <option value="Closed">Closed</option>
                 </>
               )}
+              {user?.role === "manager" && (
+                <>
+                  <option value="">All My Requests</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Open">Open</option>
+                  <option value="Closed">Closed</option>
+                  <option value="Rejected">Rejected</option>
+                </>
+              )}
             </select>
             <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
               <ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
             </div>
           </div>
-          {/* --- BATAS PERBAIKAN --- */}
-
           <div className="relative w-full sm:w-auto min-w-[150px]">
-            <DatePicker selected={dateFilter} onChange={handleDateFilterChange} dateFormat="dd/MM/yyyy" placeholderText="Filter by Date" isClearable className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700" />
-            {!dateFilter && (
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <CalendarDaysIcon className="h-5 w-5 text-gray-400" aria-hidden="true" />
-              </div>
-            )}
+            <DatePicker
+              selected={dateFilter}
+              onChange={handleDateFilterChange}
+              dateFormat="dd/MM/yyyy"
+              placeholderText="Filter by Date"
+              isClearable
+              className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700"
+            />
           </div>
         </div>
 
-        {/* --- PERBAIKAN: Tombol "Tambah" hanya untuk Head HR --- */}
-        {user && user.role === "head_hr" && (
-          <button onClick={handleAddPositionClick} className="flex items-center bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto">
-            <PlusIcon className="h-5 w-5 mr-2" />
-            Tambah Lowongan (Draft)
-          </button>
-        )}
+        {/* Tombol Aksi Kanan */}
+        <div className="flex items-center space-x-2">
+          {/* Tombol "Tambah" (Hanya untuk Head HR & Manager) */}
+          {(user?.role === "head_hr" || user?.role === "manager") &&
+            !isSelectMode && (
+              <button
+                onClick={handleAddPositionClick}
+                className="flex items-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full sm:w-auto"
+              >
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Buat Permintaan (Draft)
+              </button>
+            )}
+
+          {/* --- 10. TOMBOL SELECT MODE BARU (Tiru ManageCVsPage) --- */}
+          {user?.role === "head_hr" && ( // Hanya Head HR yang bisa bulk archive/delete
+            <button
+              onClick={handleToggleSelectMode}
+              className={`flex items-center px-3 py-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 text-sm whitespace-nowrap transition-colors duration-150 ${
+                isSelectMode
+                  ? "bg-gray-700 hover:bg-gray-800 focus:ring-gray-600 text-white"
+                  : "bg-gray-500 hover:bg-gray-600 focus:ring-gray-400 text-white"
+              }`}
+            >
+              {isSelectMode ? (
+                <>
+                  {" "}
+                  <XCircleIcon className="mr-1.5 h-4 w-4" /> Batal Pilih{" "}
+                </>
+              ) : (
+                <>
+                  {" "}
+                  <CheckCircleIcon className="mr-1.5 h-4 w-4" /> Pilih Aksi
+                  Masal{" "}
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Komponen Tabel (Sekarang "Sadar Peran" / Role-Aware) */}
+      {/* --- 11. PANEL AKSI MASAL (BULK ACTION) BARU (Tiru ManageCVsPage) --- */}
+      {isSelectMode && (
+        <div className="mb-4 p-3 bg-gray-100 rounded border flex flex-col sm:flex-row justify-between items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-600 mr-2">
+              Quick Select:
+            </span>
+            <button
+              onClick={handleSelectAll}
+              className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-gray-600"
+            >
+              All ({processedPositions.filteredAndSortedData.length})
+            </button>
+            <button
+              onClick={handleSelectNone}
+              disabled={selectedPositions.length === 0}
+              className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-gray-600"
+            >
+              None
+            </button>
+            <button
+              onClick={handleSelectClosed}
+              className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-50 focus:outline-none focus:ring-1 focus:ring-gray-500 text-gray-700"
+            >
+              Closed Only
+            </button>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {selectedPositions.length > 0 ? (
+              <>
+                <button
+                  onClick={() => handleArchivePosition(selectedPositions)}
+                  title="Arsipkan lowongan (Hanya yang 'Closed')"
+                  className="flex items-center px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400 text-white text-xs whitespace-nowrap"
+                >
+                  <ArchiveBoxIcon className="mr-1 h-4 w-4" /> Arsipkan (
+                  {selectedPositions.length})
+                </button>
+                <button
+                  onClick={() =>
+                    handleDeletePositionClick({
+                      id: selectedPositions,
+                      name: `${selectedPositions.length} lowongan`,
+                    })
+                  }
+                  title="Hapus lowongan terpilih"
+                  className="flex items-center px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white text-xs whitespace-nowrap"
+                >
+                  <TrashIcon className="mr-1 h-4 w-4" /> Hapus (
+                  {selectedPositions.length})
+                </button>
+              </>
+            ) : (
+              <span className="text-sm text-gray-500 italic">
+                Pilih lowongan untuk melakukan aksi masal.
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      {/* --- BATAS PANEL AKSI MASAL --- */}
+
+      {/* Komponen Tabel */}
       <JobPositionsTable
         data={processedPositions.data}
-        currentUserRole={user?.role} // <-- Kirim role (peran) user ke tabel
-        onEdit={handleEditPositionClick} // Untuk Head HR
-        onPublish={handlePublishClick} // <-- Handler (Penangan) BARU untuk Staff HR
-        onDelete={handleDeletePositionClick} // Untuk Head HR
-        onUpdateStatus={handleUpdateStatus} // Untuk Head HR
+        currentUserRole={user?.role}
+        onEdit={handleEditPositionClick}
+        onDelete={handleDeletePositionClick}
+        onUpdateStatus={handleUpdateStatus}
+        onArchive={handleArchivePosition} // <-- 12. Kirim handler arsip
+        // --- 13. Kirim props select mode ---
+        isSelectMode={isSelectMode}
+        selectedPositions={selectedPositions}
+        setSelectedPositions={setSelectedPositions}
+        // --- Batas props ---
         sortColumn={sortColumn}
         sortDirection={sortDirection}
         onSort={handleSort}
@@ -365,16 +644,12 @@ function ManageJobPositionsPage() {
         lastItemIndex={processedPositions.lastItemIndex}
       />
 
-      {/* Modal 1: Untuk Tambah/Edit Penuh (Hanya untuk Head HR) */}
-      <JobPositionFormModal isOpen={showCreateModal} onClose={handleCloseModals} onSubmit={handleSubmitFullForm} initialData={positionToEdit} isLoading={isSubmitting} />
-
-      {/* Modal 2: Untuk "Pemanis" (Sweetener) & Publish (Hanya untuk Staff HR) */}
-      <PublishFormModal
-        isOpen={showPublishModal}
+      {/* Modal (Tetap 1 modal) */}
+      <JobPositionFormModal
+        isOpen={showFormModal}
         onClose={handleCloseModals}
-        onSubmit={handleSubmitPublishForm}
-        initialData={positionToEdit} // Kirim data "mentah"
-        isLoading={isSubmitting}
+        onSubmit={handleSubmitForm}
+        initialData={positionToEdit}
       />
     </div>
   );

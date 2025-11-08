@@ -1,140 +1,144 @@
 // src/pages/hr/RequestPositionPage.jsx
-import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import Notiflix from 'notiflix';
-import RequestForm from '../../components/hr/RequestForm'; 
-import RequestStatusTable from '../../components/hr/RequestStatusTable';
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import axios from "axios";
+import { useAuth } from "../../context/AuthContext";
+import RequestForm from "../../components/hr/RequestForm"; //
+import RequestHistoryTable from "../../components/hr/RequestHistoryTable"; // <-- Impor tabel baru
+import Notiflix from "notiflix";
 
+// --- (Definisi URL API & Token Helper) ---
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const API_GET_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions`;
-const API_CREATE_POSITION_URL = `${API_BASE_URL}/api/hr/job-positions`;
-
-// "Tiru Gaya" ManageUsersPage.jsx
+const API_ADMIN_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions`;
 const getAuthToken = () => {
   return localStorage.getItem("token");
 };
 
 function RequestPositionPage() {
-  const [requests, setRequests] = useState([]);
+  const { user } = useAuth(); // <-- Ambil user yang login
+  const [myPositions, setMyPositions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const fetchRequests = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      console.log("Fetching job positions for Manager...");
-      
-      // "Tiru Gaya" ManageUsersPage.jsx (Manual Token)
-      const token = getAuthToken();
-      if (!token) {
-        const authError = new Error("User not authenticated. Token missing.");
-        authError.response = { status: 401, data: { message: "Silakan login kembali." } };
-        throw authError;
-      }
+  // --- 1. Fungsi untuk mengambil data ---
+  const fetchMyPositions = useCallback(async () => {
+    if (!user) return; // Tunggu sampai info user tersedia
 
-      const response = await axios.get(API_GET_POSITIONS_URL, {
-        headers: { Authorization: `Bearer ${token}` }, 
+    setIsLoading(true);
+    try {
+      const token = getAuthToken();
+      if (!token) throw new Error("Token tidak ditemukan");
+
+      const response = await axios.get(API_ADMIN_POSITIONS_URL, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
-      // Di arsitektur "anti-challenge", backend akan (seharusnya)
-      // sudah memfilter ini HANYA untuk 'requestedById' milik user ini.
-      setRequests(response.data);
-      
+
+      // --- 2. FILTER PENTING (Hanya tampilkan milik Manajer) ---
+      const allUserPositions = response.data.filter(
+        (pos) => pos.requestor && pos.requestor.id === user.id
+      );
+
+      setMyPositions(
+        allUserPositions.sort(
+          (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+        )
+      );
+      setError(null);
     } catch (err) {
-      console.error("Error fetching job positions:", err);
-      const errMsg = err.response?.data?.message || "Gagal memuat data permintaan.";
-      setError(errMsg);
-      
-      if (err.response?.status === 401) {
-         Notiflix.Report.warning("Sesi Habis", "Token Anda tidak valid atau kedaluwarsa. Silakan login kembali.", "Okay");
-      } else {
-         Notiflix.Report.failure("Error", errMsg, "Okay");
-      }
+      setError(err.message || "Gagal mengambil data riwayat.");
+      Notiflix.Report.failure(
+        "Error",
+        err.message || "Gagal mengambil data riwayat.",
+        "Okay"
+      );
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [user]); // Dependensi pada 'user'
 
-  // useEffect (Sudah benar)
+  // --- 3. Ambil data saat halaman dimuat ---
   useEffect(() => {
-    fetchRequests();
-  }, [fetchRequests]);
+    fetchMyPositions();
+  }, [fetchMyPositions]);
 
-  /**
-   * Handler untuk submit form dari komponen RequestForm.
-   * Ini adalah implementasi use case 'Request New Position'.
-   */
-  const handleCreateRequest = async (formData, callback) => {
+  // --- 4. Logika untuk memecah data jadi 2 tabel ---
+  const { inProgressPositions, completedPositions } = useMemo(() => {
+    const inProgress = myPositions.filter((pos) =>
+      ["Draft", "Approved", "Open"].includes(pos.status)
+    );
+    const completed = myPositions.filter((pos) =>
+      ["Closed", "Rejected"].includes(pos.status)
+    );
+    return { inProgressPositions: inProgress, completedPositions: completed };
+  }, [myPositions]);
+
+  // --- 5. Handler untuk submit modal RequestForm ---
+  const handleRequestSubmitted = async (formData, callback) => {
+    Notiflix.Loading.standard("Mengirim Permintaan...");
     try {
-      Notiflix.Loading.standard("Mengirim permintaan...");
-      
-      const dataToSubmit = {
-        ...formData,
-        status: "Draft", // <- "Anti-Challenge": Manager HANYA bisa buat "Draft"
-      };
-
-      // "Tiru Gaya" ManageUsersPage.jsx (Manual Token)
       const token = getAuthToken();
-      if (!token) {
-        const authError = new Error("User not authenticated. Token missing.");
-        authError.response = { status: 401, data: { message: "Silakan login kembali." } };
-        throw authError;
-      }
+      if (!token) throw new Error("Token tidak ditemukan");
 
-      await axios.post(API_CREATE_POSITION_URL, dataToSubmit, {
-        headers: { Authorization: `Bearer ${token}` }, // <-- Tambahkan header
-      });
+      // Panggil endpoint POST dari jobPosition.controller.ts
+      await axios.post(
+        API_ADMIN_POSITIONS_URL,
+        formData, // formData sudah berisi (name, location, dll)
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       Notiflix.Loading.remove();
       Notiflix.Report.success(
-        "Permintaan Terkirim",
-        `Permintaan untuk posisi "${formData.name}" telah berhasil dikirim ke Head HR untuk persetujuan (status 'Draft').`,
+        "Berhasil",
+        "Permintaan lowongan (Draft) berhasil dikirim.",
         "Okay"
       );
-      
-      fetchRequests(); // Muat ulang data tabel
-      callback(true); // Tutup modal
 
-    } catch (error) {
+      fetchMyPositions(); // <-- REFRESH tabel setelah sukses
+      callback(true); // Memberitahu modal RequestForm untuk menutup
+    } catch (err) {
       Notiflix.Loading.remove();
-      console.error("Error creating position request:", error);
-      // Tangani error 401
-      if (error.response && error.response.status === 401) {
-          Notiflix.Report.warning("Sesi Habis", "Sesi Anda telah berakhir. Silakan login kembali.", "Okay");
-      } else {
-          Notiflix.Report.failure("Gagal Mengirim", error.response?.data?.message || "Terjadi kesalahan.", "Okay");
-      }
-      callback(false); // Jangan tutup modal
+      Notiflix.Report.failure(
+        "Gagal",
+        err.response?.data?.message || "Terjadi kesalahan.",
+        "Okay"
+      );
+      callback(false); // Gagal, modal jangan ditutup
     }
   };
 
-  // Tampilan Loading
-  if (isLoading && requests.length === 0) {
-     return <div className="text-center p-8 text-gray-600">Memuat data permintaan...</div>;
-  }
-
   return (
     <div className="request-position-page-container p-4">
-      <h2 className="text-2xl font-semibold text-gray-800 mb-6">Permintaan Lowongan (Request Position)</h2>
+      <h2 className="text-2xl font-semibold text-gray-800 mb-6">
+        Request New Position
+      </h2>
 
-      {/* 1. Form (Tombol + Modal) */}
-      <RequestForm onSubmitRequest={handleCreateRequest} />
+      {/* --- Tombol Pemicu Modal --- */}
+      <div className="mb-6">
+        <RequestForm onSubmitRequest={handleRequestSubmitted} />
+      </div>
 
-      <div className="my-8 border-t border-gray-200"></div>
+      {/* --- Tabel 1: Sedang Progress --- */}
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold text-gray-700 mb-4">
+          Permintaan Sedang Progress
+        </h3>
+        {isLoading && <p className="text-center text-gray-500">Memuat...</p>}
+        {!isLoading && !error && (
+          <RequestHistoryTable data={inProgressPositions} />
+        )}
+        {!isLoading && error && (
+          <p className="text-center text-red-500">{error}</p>
+        )}
+      </div>
 
-      {/* 2. Tabel Status */}
-      <h3 className="text-xl font-semibold text-gray-800 mb-4">Status Permintaan Anda</h3>
-      <p className="text-sm text-gray-600 mb-4">
-        Lacak status permintaan lowongan yang telah Anda ajukan. Status akan berubah dari "Draft" (Menunggu Persetujuan HR) 
-        menjadi "Approved" (Disetujui), "Open" (Dipublikasikan oleh Staff HR), atau "Rejected" (Ditolak).
-      </p>
-      
-      <RequestStatusTable
-        data={requests}
-        isLoading={isLoading} // Kirim status loading untuk refresh
-        error={error}
-      />
+      {/* --- Tabel 2: Riwayat Selesai --- */}
+      <div>
+        <h3 className="text-xl font-semibold text-gray-700 mb-4">
+          Riwayat Selesai (Closed / Rejected)
+        </h3>
+        {!isLoading && !error && (
+          <RequestHistoryTable data={completedPositions} />
+        )}
+      </div>
     </div>
   );
 }
