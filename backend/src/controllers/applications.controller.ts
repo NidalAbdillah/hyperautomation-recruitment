@@ -6,6 +6,7 @@ import {
   ApplicationCreationDTO,
   N8nResultDTO,
   RankFiltersDTO,
+  ApplicationStatusUpdateDTO,
 } from "../interfaces/IApplicationService";
 import { Stream } from "stream"; // Pastikan Stream diimpor
 
@@ -189,15 +190,31 @@ const viewCvFile = async (req: Request, res: Response) => {
 const updateApplicationStatus = async (req: Request, res: Response) => {
   try {
     const applicationId = parseInt(req.params.id, 10);
-    const { status } = req.body as { status: string };
+    
+    // --- INI PERBAIKANNYA ---
+    // 1. Ambil seluruh body sebagai DTO
+    const updateData = req.body as ApplicationStatusUpdateDTO; 
+    
     if (isNaN(applicationId)) { 
         const err: any = new Error("Invalid application ID."); err.status = 400; throw err; 
     }
-    if (!status) { 
-        const err: any = new Error("New status is required."); err.status = 400; throw err; 
+    
+    // 2. Validasi bahwa body tidak kosong
+    if (!updateData || Object.keys(updateData).length === 0) { 
+        const err: any = new Error("Update data is required (e.g., status or interview_notes)."); 
+        err.status = 400; 
+        throw err; 
     }
-    const updatedApplication = await applicationService.updateApplicationStatus(applicationId, status);
+
+    // 3. Kirim seluruh objek 'updateData' ke service, bukan hanya string 'status'
+    const updatedApplication = await applicationService.updateApplicationStatus(
+      applicationId, 
+      updateData // <-- Kirim objek utuh
+    );
+    // --- BATAS PERBAIKAN ---
+
     res.status(200).json({ message: "Application status updated.", application: updatedApplication });
+  
   } catch (error: any) {
     handleErrorResponse(res, error);
   }

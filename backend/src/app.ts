@@ -9,8 +9,10 @@ const app: Express = express();
 
 // --- Middleware Global ---
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "50mb" }));
+
+// Tingkatkan juga limit untuk URL-encoded (misal: 50MB)
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // --- Integrasi Router API ---
 // 'apiRoutes' sekarang 100% adalah router yang valid

@@ -18,6 +18,7 @@ interface CvApplicationAttributes {
   requirement_data: object | null; // Tipe JSON
   isArchived: boolean;
   appliedPositionId: number;
+  interview_notes: object | null;
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
@@ -51,6 +52,7 @@ class CvApplication extends Model<CvApplicationAttributes, CvApplicationCreation
   public requirement_data!: object | null;
   public isArchived!: boolean;
   public appliedPositionId!: number;
+  public interview_notes!: object | null;
 
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
@@ -136,6 +138,11 @@ CvApplication.init(
       },
       onUpdate: "CASCADE",
       onDelete: "SET NULL",
+    },
+    interview_notes: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: null,
     },
   },
   {
