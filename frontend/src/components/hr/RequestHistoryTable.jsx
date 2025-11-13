@@ -9,30 +9,30 @@ const StatusBadge = ({ status }) => {
   let label = status;
 
   switch (status) {
-    case "Draft":
+    case "DRAFT":
       bgColor = "bg-yellow-100";
       textColor = "text-yellow-800";
       label = "Draft (Waiting Approval)";
       break;
-    case "Approved":
+    case "APPROVED":
       bgColor = "bg-blue-100";
       textColor = "text-blue-800";
       label = "Approved (Ready to Open)";
       break;
-    case "Open":
+    case "OPEN":
       bgColor = "bg-green-100";
       textColor = "text-green-800";
       label = "Published (Open)";
       break;
-    case "Closed":
+    case "CLOSED":
       bgColor = "bg-gray-200";
       textColor = "text-gray-800";
       label = "Closed";
       break;
-    case "Rejected":
+    case "REJECTED":
       bgColor = "bg-red-100";
       textColor = "text-red-800";
-      label = "Rejected";
+      label = "REJECTED";
       break;
     default:
       label = status ? status.toUpperCase() : "N/A";

@@ -16,7 +16,7 @@ export interface JobPositionDTO {
   registrationEndDate: Date | null;
   specificRequirements?: string | null;
   availableSlots: number;
-  status: 'Draft' | 'Open' | 'Closed' | 'Approved' | 'Rejected';
+  status: 'DRAFT' | 'OPEN' | 'CLOSED' | 'APPROVED' | 'REJECTED';
   announcement?: string | null;
 }
 

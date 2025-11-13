@@ -98,7 +98,7 @@ CvApplication.init(
     status: {
       type: DataTypes.STRING, // Sebaiknya gunakan ENUM di sini
       allowNull: false,
-      defaultValue: "Submitted",
+      defaultValue: "SUBMITTED",
     },
     similarity_score: {
       type: DataTypes.FLOAT,

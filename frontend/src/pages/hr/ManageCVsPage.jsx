@@ -241,8 +241,8 @@ function ManageCVsPage() {
       setPdfUrlToView(pdfBlobUrl);
       setViewingCv(cv);
       setShowPdfModal(true);
-      if (cv.status === "Submitted") {
-        performStatusUpdate(cv, "Reviewed").catch(err => console.error("Auto-update failed:", err));
+      if (cv.status === "SUBMITTED") {
+        performStatusUpdate(cv, "REVIEWED").catch(err => console.error("Auto-update failed:", err));
       }
     } catch (error) {
       Notiflix.Loading.remove();
@@ -260,7 +260,7 @@ function ManageCVsPage() {
 
   const handleStatusChangeDirectly = useCallback((cv, newStatus) => {
     if (cv.status === newStatus) return;
-    const isDisabled = cv.status === "Submitted" || !cv.qualitative_assessment;
+    const isDisabled = cv.status === "SUBMITTED" || !cv.qualitative_assessment;
     if (isDisabled) {
         Notiflix.Report.info("Info", "Please wait for AI analysis before changing status.", "Okay");
         return;
@@ -325,13 +325,13 @@ function ManageCVsPage() {
   // Auto Selection Handlers
   const handleSelectAll = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.map(cv => cv.id)), [processedCvData.filteredAndSortedData]);
   const handleSelectNone = useCallback(() => setSelectedCVs([]), []);
-  const handleSelectAccepted = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter(cv => cv.status === 'Accepted').map(cv => cv.id)), [processedCvData.filteredAndSortedData]);
-  const handleSelectRejected = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter(cv => cv.status === 'Rejected').map(cv => cv.id)), [processedCvData.filteredAndSortedData]);
+  const handleSelectAccepted = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter(cv => cv.status === 'STAFF_APPROVED').map(cv => cv.id)), [processedCvData.filteredAndSortedData]);
+  const handleSelectRejected = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter(cv => cv.status === 'STAFF_REJECTED').map(cv => cv.id)), [processedCvData.filteredAndSortedData]);
 
   // Bulk Action Handlers
   const handleArchiveSelected = useCallback(async () => {
-    const idsToArchive = selectedCVs.filter(id => { const cv = allCvData.find(item => item.id === id); return cv && (cv.status === 'Accepted' || cv.status === 'Rejected'); });
-    if (idsToArchive.length === 0) { Notiflix.Report.info("Info", "Only applications with status 'Accepted' or 'Rejected' can be archived.", "Okay"); return; }
+    const idsToArchive = selectedCVs.filter(id => { const cv = allCvData.find(item => item.id === id); return cv && (cv.status === 'STAFF_APPROVED' || cv.status === 'STAFF_REJECTED'); });
+    if (idsToArchive.length === 0) { Notiflix.Report.info("Info", "Only applications with status 'STAFF_APPROVED' or 'STAFF_REJECTED' can be archived.", "Okay"); return; }
     Notiflix.Confirm.show('Confirm Archive', `Archive ${idsToArchive.length} selected applications?`, 'Archive', 'Cancel', async () => {
       try {
         Notiflix.Loading.standard('Archiving...'); const token = getAuthToken(); if (!token) throw new Error("Missing token");
@@ -449,13 +449,13 @@ function ManageCVsPage() {
             <span className="text-sm font-medium text-gray-600 mr-2">Quick Select:</span>
             <button onClick={handleSelectAll} className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 focus:outline-none focus:ring-1 focus:ring-gray-600">All ({processedCvData.filteredAndSortedData.length})</button>
             <button onClick={handleSelectNone} disabled={selectedCVs.length === 0} className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-gray-600">None</button>
-            <button onClick={handleSelectAccepted} className="px-2 py-1 text-xs border rounded bg-white hover:bg-green-50 focus:outline-none focus:ring-1 focus:ring-green-500 text-green-700">Accepted</button>
-            <button onClick={handleSelectRejected} className="px-2 py-1 text-xs border rounded bg-white hover:bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-500 text-red-700">Rejected</button>
+            <button onClick={handleSelectAccepted} className="px-2 py-1 text-xs border rounded bg-white hover:bg-green-50 focus:outline-none focus:ring-1 focus:ring-green-500 text-green-700">STAFF_APPROVED</button>
+            <button onClick={handleSelectRejected} className="px-2 py-1 text-xs border rounded bg-white hover:bg-red-50 focus:outline-none focus:ring-1 focus:ring-red-500 text-red-700">STAFF_REJECTED</button>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {selectedCVs.length > 0 ? (
               <>
-                <button onClick={handleArchiveSelected} title="Archive selected (only Accepted/Rejected)" className="flex items-center px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400 text-white text-xs whitespace-nowrap">
+                <button onClick={handleArchiveSelected} title="Archive selected (only STAFF_APPROVED/STAFF_REJECTED)" className="flex items-center px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 bg-yellow-500 hover:bg-yellow-600 focus:ring-yellow-400 text-white text-xs whitespace-nowrap">
                   <ArchiveBoxIcon className="mr-1 h-4 w-4" /> Archive ({selectedCVs.length})
                 </button>
                 <button onClick={handleBulkDeleteSelected} title="Delete selected permanently" className="flex items-center px-3 py-1.5 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-1 bg-red-600 hover:bg-red-700 focus:ring-red-500 text-white text-xs whitespace-nowrap">

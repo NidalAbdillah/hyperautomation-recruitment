@@ -6,8 +6,8 @@ import {
   BriefcaseIcon, // Ikon untuk Lowongan Aktif
   ExclamationCircleIcon, // Ikon untuk CV Perlu Ditinjau
   // StarIcon, // Ikon untuk Shortlisted (tidak dipakai lagi di widget)
-  CheckCircleIcon, // Ikon baru untuk Total Accepted
-  XCircleIcon, // Ikon baru untuk Total Rejected
+  CheckCircleIcon, // Ikon baru untuk Total STAFF_APPROVED
+  XCircleIcon, // Ikon baru untuk Total STAFF_Rejected
 } from "@heroicons/react/24/outline";
 
 // Mapping sederhana dari 'type' ke ikon Heroicons
@@ -17,8 +17,8 @@ const iconMap = {
   activePositions: BriefcaseIcon, // Mapping untuk Lowongan Aktif
   needReview: ExclamationCircleIcon, // Mapping untuk CV Perlu Ditinjau
   // shortlisted: StarIcon, // Mapping Shortlisted dihapus
-  totalAccepted: CheckCircleIcon, // Mapping baru untuk Total Accepted
-  totalRejected: XCircleIcon, // Mapping baru untuk Total Rejected
+  totalSTAFF_APPROVED: CheckCircleIcon, // Mapping baru untuk Total STAFF_APPROVED
+  totalSTAFF_REJECTED: XCircleIcon, // Mapping baru untuk Total STAFF_Rejected
   // Tambahkan mapping ikon lain jika perlu untuk type widget lainnya
 };
 

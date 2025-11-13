@@ -11,22 +11,23 @@ import {
 
 // Helper Lencana Status
 const StatusBadge = ({ status }) => {
-  let bgColor = "bg-gray-200";
-  let textColor = "text-gray-800";
-  let label = status;
+  // Gunakan "Kamus" untuk tampilan yang rapi
+  const JOB_STATUS_DISPLAY_MAP = {
+    "DRAFT":     { label: "Draft", color: "bg-gray-100 text-gray-800" },
+    "APPROVED":  { label: "Approved", color: "bg-blue-100 text-blue-800" },
+    "REJECTED":  { label: "Rejected", color: "bg-red-100 text-red-800" },
+    "OPEN":      { label: "Open (Published)", color: "bg-green-100 text-green-800" },
+    "CLOSED":    { label: "Closed", color: "bg-gray-100 text-gray-800" },
+    "default":   { label: status || "Unknown", color: "bg-gray-100 text-gray-800" }
+  };
+  
+  const statusInfo = JOB_STATUS_DISPLAY_MAP[status] || JOB_STATUS_DISPLAY_MAP["default"];
 
-  if (status === "Closed") {
-    label = "Closed";
-  } else if (status === "Rejected") {
-    bgColor = "bg-red-100";
-    textColor = "text-red-800";
-    label = "Rejected";
-  }
   return (
     <span
-      className={`px-3 py-1 inline-flex text-xs font-semibold rounded-full ${bgColor} ${textColor}`}
+      className={`px-3 py-1 inline-flex text-xs font-semibold rounded-full ${statusInfo.color}`}
     >
-      {label}
+      {statusInfo.label}
     </span>
   );
 };

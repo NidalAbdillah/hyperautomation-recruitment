@@ -15,27 +15,27 @@ const StatusBadge = ({ status }) => {
   let textColor = "text-gray-800";
   let label = status;
   switch (status) {
-    case "Draft":
+    case "DRAFT":
       bgColor = "bg-yellow-100";
       textColor = "text-yellow-800";
       label = "Draft (Waiting Approval)";
       break;
-    case "Approved":
+    case "APPROVED":
       bgColor = "bg-blue-100";
       textColor = "text-blue-800";
       label = "Approved (Ready to Open)";
       break;
-    case "Open":
+    case "OPEN":
       bgColor = "bg-green-100";
       textColor = "text-green-800";
       label = "Published (Open)";
       break;
-    case "Closed":
+    case "CLOSED":
       bgColor = "bg-gray-200";
       textColor = "text-gray-800";
       label = "Closed";
       break;
-    case "Rejected":
+    case "REJECTED":
       bgColor = "bg-red-100";
       textColor = "text-red-800";
       label = "Rejected";
@@ -103,7 +103,7 @@ function JobPositionsTable({
     if (!setSelectedPositions) return;
     // --- Filter: Hanya pilih ID yang 'Closed' di halaman ini ---
     const idsOnPage = data
-      .filter(pos => pos.status === 'Closed') 
+      .filter(pos => pos.status === 'CLOSED') 
       .map((pos) => pos.id);
       
     if (event.target.checked) {
@@ -120,7 +120,7 @@ function JobPositionsTable({
   };
 
   // --- 2. PERUBAHAN: LOGIKA CHECK ALL (Hanya cek 'Closed') ---
-  const selectablePositionsOnPage = data.filter(pos => pos.status === 'Closed');
+  const selectablePositionsOnPage = data.filter(pos => pos.status === 'CLOSED');
   
   const isCheckAllChecked =
     selectablePositionsOnPage.length > 0 && 
@@ -128,7 +128,7 @@ function JobPositionsTable({
   
   const isIndeterminate =
     !isCheckAllChecked &&
-    data.some((pos) => pos.status === 'Closed' && selectedPositions.includes(pos.id));
+    data.some((pos) => pos.status === 'CLOSED' && selectedPositions.includes(pos.id));
   // --- BATAS PERUBAHAN ---
 
   return (
@@ -181,12 +181,12 @@ function JobPositionsTable({
               data.map((position) => {
                 const isDateMissing = !position.registrationStartDate || !position.registrationEndDate;
                 const isDropdownDisabled =
-                  (currentUserRole === "staff_hr" && position.status === "Closed") ||
-                  position.status === "Draft" ||
-                  position.status === "Rejected";
+                  (currentUserRole === "staff_hr" && position.status === "CLOSED") ||
+                  position.status === "DRAFT" ||
+                  position.status === "REJECTED";
 
                 // --- 4. PERUBAHAN: Logika disable checkbox ---
-                const isCheckboxDisabled = position.status !== 'Closed';
+                const isCheckboxDisabled = position.status !== 'CLOSED';
 
                 return (
                   <tr
@@ -237,7 +237,7 @@ function JobPositionsTable({
                             <button onClick={() => onDelete(position)} className="text-red-600 hover:text-red-900" title="Hapus (Head HR)">
                               <TrashIcon className="h-6 w-6" />
                             </button>
-                            {position.status === "Closed" && (
+                            {position.status === "CLOSED" && (
                                <button
                                 onClick={() => onArchive([position.id])} 
                                 className="text-gray-500 hover:text-yellow-600"
@@ -250,7 +250,7 @@ function JobPositionsTable({
                         )}
                         {currentUserRole === "staff_hr" && (
                           <>
-                            {(position.status === "Open" || position.status === "Approved") && (
+                            {(position.status === "OPEN" || position.status === "APPROVED") && (
                               <button onClick={() => onEdit(position)} className="text-indigo-600 hover:text-indigo-900" title="Edit Pengumuman/Tanggal">
                                 <PencilIcon className="h-6 w-6" />
                               </button>
@@ -259,12 +259,10 @@ function JobPositionsTable({
                         )}
                       </div>
                     </td>
-
-                    {/* (Kolom Update Status... tetap sama) */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {position.status === "Approved" ||
-                      position.status === "Open" ||
-                      position.status === "Closed" ? (
+                      {position.status === "APPROVED" ||
+                      position.status === "OPEN" ||
+                      position.status === "CLOSED" ? (  // ✅ PERBAIKI: Hilangkan spasi
                         <select
                           aria-label={`Update status for ${position.name}`}
                           value={position.status}
@@ -278,14 +276,24 @@ function JobPositionsTable({
                               : "bg-white border-gray-300 text-gray-700 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400"
                           }`}
                         >
-                          {position.status === "Approved" && ( <option value="Approved">Approved</option> )}
-                          {(currentUserRole === "head_hr" || position.status === "Approved" || position.status === "Open") && (
-                            <option value="Open" disabled={isDateMissing} title={isDateMissing ? "Tanggal harus diisi (via Edit) sebelum di-Open" : "Publikasikan lowongan"}>
+                          {position.status === "APPROVED" && (
+                            <option value="APPROVED">Approved</option>
+                          )}
+                          {(currentUserRole === "head_hr" || 
+                            position.status === "APPROVED" || 
+                            position.status === "OPEN") && (
+                            <option 
+                              value="OPEN" 
+                              disabled={isDateMissing} 
+                              title={isDateMissing ? "Tanggal harus diisi (via Edit) sebelum di-OPEN" : "Publikasikan lowongan"}
+                            >
                               Open
                             </option>
                           )}
-                          {(currentUserRole === "head_hr" || position.status === "Open" || position.status === "Closed") && (
-                            <option value="Closed">Closed</option>
+                          {(currentUserRole === "head_hr" || 
+                            position.status === "OPEN" || 
+                            position.status === "CLOSED") && (  // ✅ PERBAIKI: Hilangkan spasi
+                            <option value="CLOSED">Closed</option>
                           )}
                         </select>
                       ) : (

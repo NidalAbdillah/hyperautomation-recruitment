@@ -56,23 +56,26 @@ function RequestPositionPage() {
   }, [user]); // Dependensi pada 'user'
 
   // --- 3. Ambil data saat halaman dimuat ---
-  useEffect(() => {
-    fetchMyPositions();
-  }, [fetchMyPositions]);
+    useEffect(() => {
+        // Hanya jalankan fetch JIKA user sudah terdefinisi
+        if (user) { 
+          fetchMyPositions();
+        }
+      }, [fetchMyPositions, user]);
 
   // --- 4. Logika untuk memecah data jadi 2 tabel ---
   const { inProgressPositions, completedPositions } = useMemo(() => {
     const inProgress = myPositions.filter((pos) =>
-      ["Draft", "Approved", "Open"].includes(pos.status)
+      ["DRAFT", "APPROVED", "OPEN"].includes(pos.status)
     );
     const completed = myPositions.filter((pos) =>
-      ["Closed", "Rejected"].includes(pos.status)
+      ["CLOSED", "REJECTED"].includes(pos.status) // <-- Perbaikan di sini
     );
     return { inProgressPositions: inProgress, completedPositions: completed };
   }, [myPositions]);
 
   // --- 5. Handler untuk submit modal RequestForm ---
-  const handleRequestSubmitted = async (formData, callback) => {
+  const handleRequestSUBMITTED = async (formData, callback) => {
     Notiflix.Loading.standard("Mengirim Permintaan...");
     try {
       const token = getAuthToken();
@@ -113,7 +116,7 @@ function RequestPositionPage() {
 
       {/* --- Tombol Pemicu Modal --- */}
       <div className="mb-6">
-        <RequestForm onSubmitRequest={handleRequestSubmitted} />
+        <RequestForm onSubmitRequest={handleRequestSUBMITTED} />
       </div>
 
       {/* --- Tabel 1: Sedang Progress --- */}
@@ -133,7 +136,7 @@ function RequestPositionPage() {
       {/* --- Tabel 2: Riwayat Selesai --- */}
       <div>
         <h3 className="text-xl font-semibold text-gray-700 mb-4">
-          Riwayat Selesai (Closed / Rejected)
+          Riwayat Selesai (Closed / REJECTED)
         </h3>
         {!isLoading && !error && (
           <RequestHistoryTable data={completedPositions} />

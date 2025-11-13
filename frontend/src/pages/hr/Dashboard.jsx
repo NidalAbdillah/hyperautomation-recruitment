@@ -29,6 +29,19 @@ const getAuthToken = () => {
   return localStorage.getItem("token"); // <-- Sesuaikan jika kunci token Anda berbeda
 };
 
+const STATUS_DISPLAY_MAP = {
+  "SUBMITTED":    { label: "Submitted", color: "bg-gray-100 text-gray-800" },
+  "REVIEWED":     { label: "Reviewed (AI)", color: "bg-blue-100 text-blue-800" },
+  "STAFF_APPROVED": { label: "Approved (Staff)", color: "bg-cyan-100 text-cyan-800" },
+  "STAFF_REJECTED": { label: "Rejected (Staff)", color: "bg-red-100 text-red-800" },
+  "INTERVIEW_QUEUED":    { label: "In Queue", color: "bg-yellow-100 text-yellow-800" },
+  "INTERVIEW_SCHEDULED": { label: "Scheduled", color: "bg-purple-100 text-purple-800" },
+  "PENDING_FINAL_DECISION": { label: "Final Review", color: "bg-indigo-100 text-indigo-800" },
+  "HIRED":      { label: "Hired", color: "bg-green-100 text-green-800" },
+  "NOT_HIRED":  { label: "Not Hired", color: "bg-red-100 text-red-800" },
+  "ONBOARDING": { label: "Onboarding", color: "bg-green-100 text-green-800" },
+  "default":    { label: "Unknown", color: "bg-gray-100 text-gray-800" }
+};
 // Helper function untuk memformat tanggal agar lebih mudah dibaca (misal: DD/MM/YYYY)
 const formatDisplayDate = (isoString) => {
   if (!isoString) return "-";
@@ -184,18 +197,18 @@ function DashboardAdmin() {
       trendColor: "red",
     },
     {
-      id: "totalAccepted",
-      title: "Total Accepted",
-      value: currentDashboardData.stats.acceptedCvCount,
-      type: "totalAccepted",
+      id: "totalSTAFF_APPROVED",
+      title: "Total STAFF_APPROVED",
+      value: currentDashboardData.stats.staffApprovedCount,
+      type: "totalSTAFF_APPROVED",
       trendText: "",
       trendColor: "green",
     },
     {
-      id: "totalRejected",
-      title: "Total Rejected",
-      value: currentDashboardData.stats.rejectedCvCount,
-      type: "totalRejected",
+      id: "totalSTAFF_REJECTED",
+      title: "Total STAFF_REJECTED",
+      value: currentDashboardData.stats.staffRejectedCount,
+      type: "totalSTAFF_REJECTED",
       trendText: "",
       trendColor: "red",
     },
@@ -204,8 +217,8 @@ function DashboardAdmin() {
 
   // Data untuk Doughnut Chart (Distribusi Status)
   // Ambil data dari respons API chartsData.statusDistribution
-  // Hanya sertakan status yang diinginkan: Submitted, Reviewed, Accepted, Rejected
-  const desiredStatuses = ["Submitted", "Reviewed", "Accepted", "Rejected"];
+  // Hanya sertakan status yang diinginkan: SUBMITTED, REVIEWED, STAFF_APPROVED, STAFF_REJECTED
+  const desiredStatuses = ["SUBMITTED", "REVIEWED", "STAFF_APPROVED", "STAFF_REJECTED"];
   const filteredStatusDistribution = Object.fromEntries(
     Object.entries(currentDashboardData.chartsData.statusDistribution || {})
       // Mengubah callback filter agar hanya menerima 'status'
@@ -228,11 +241,11 @@ function DashboardAdmin() {
         data: Object.values(sortedFilteredStatusDistribution), // Data dari value objek yang sudah diurutkan
         backgroundColor: [
           // Sesuaikan warna dengan status yang ada di backend dan urutan di desiredStatuses
-          // Urutan warna: Submitted (Biru), Reviewed (Kuning), Accepted (Hijau), Rejected (Merah)
-          "rgba(0, 123, 255, 0.6)", // Submitted (Biru)
-          "rgba(255, 193, 7, 0.6)", // Reviewed (Kuning)
-          "rgba(40, 167, 69, 0.6)", // Accepted (Hijau)
-          "rgba(220, 53, 69, 0.6)", // Rejected (Merah)
+          // Urutan warna: SUBMITTED (Biru), REVIEWED (Kuning), STAFF_APPROVED (Hijau), STAFF_Rejected (Merah)
+          "rgba(0, 123, 255, 0.6)", // SUBMITTED (Biru)
+          "rgba(255, 193, 7, 0.6)", // REVIEWED (Kuning)
+          "rgba(40, 167, 69, 0.6)", // STAFF_APPROVED (Hijau)
+          "rgba(220, 53, 69, 0.6)", // STAFF_Rejected (Merah)
         ].slice(0, Object.keys(sortedFilteredStatusDistribution).length), // Pastikan jumlah warna sesuai jumlah status yang ditampilkan
         borderColor: "#ffffff", // Border putih antar segmen
         borderWidth: 2,
@@ -404,25 +417,16 @@ function DashboardAdmin() {
                       {app.qualification} {/* Sesuaikan dengan nama field dari API */}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {/* Badge status - Sesuaikan kelas berdasarkan app.status dari API */}
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                          // Menggunakan warna badge yang sesuai dengan permintaan chart
-                          app.status === "Submitted"
-                            ? "bg-blue-100 text-blue-800" // Submitted: Biru
-                            : app.status === "Reviewed"
-                            ? "bg-yellow-100 text-yellow-800" // Reviewed: Kuning
-                            : app.status === "Accepted"
-                            ? "bg-green-100 text-green-800" // Accepted: Hijau
-                            : app.status === "Rejected"
-                            ? "bg-red-100 text-red-800" // Rejected: Merah
-                            : // Status Shortlisted tidak ada di badge karena tidak di widget
-                              "bg-gray-100 text-gray-800" // Default
-                        }`}
-                      >
-                        {app.status} {/* Sesuaikan dengan nama field dari API */}
-                      </span>
+                      {(() => {
+                        const statusInfo = STATUS_DISPLAY_MAP[app.status] || STATUS_DISPLAY_MAP["default"];
+                        return (
+                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        );
+                      })()}
                     </td>
+                    
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {/* Format tanggal dari API */}
                       {formatDisplayDate(app.createdAt)} {/* Sesuaikan dengan nama field tanggal dari API */}

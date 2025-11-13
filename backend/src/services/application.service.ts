@@ -14,166 +14,176 @@ import {
   N8nResultDTO,
   RankFiltersDTO,
   DownloadFileStream,
-  // --- 1. SEKARANG IMPORT INI AKAN BERHASIL ---
   ApplicationStatusUpdateDTO, 
 } from "../interfaces/IApplicationService";
 import { Stream } from "stream";
 
-// Helper: Error Handling
 const createError = (message: string, status: number): Error => {
   const error: any = new Error(message);
   error.status = status;
   return error;
 };
 
-/**
- * Service class untuk mengelola semua logika bisnis terkait CV Applications.
- * @class ApplicationService
- * @implements {IApplicationService}
- */
 class ApplicationService implements IApplicationService {
   public standardAttributes: string[];
   public validStatuses: string[];
 
   constructor() {
-    // --- 2. PERBARUI STANDARD ATTRIBUTES ---
     this.standardAttributes = [
       "id", "fullName", "email", "qualification", "cvFileName", "cvFileObjectKey",
       "status", "createdAt", "updatedAt", "isArchived", "appliedPositionId",
       "similarity_score", "passed_hard_gate", "qualitative_assessment", 
       "cv_data", "requirement_data", 
-      "interview_notes", // <-- TAMBAHKAN INI
+      "interview_notes",
     ];
     
-    // --- 3. PERBARUI VALID STATUSES ---
     this.validStatuses = [
-      "Submitted", "Reviewed", "Accepted", "Rejected",
-      "Interview_Queued", // <-- TAMBAHKAN INI
-      "Interview_Scheduled", // <-- TAMBAHKAN INI
-      "Waiting_HR_Final", // <-- TAMBAHKAN INI
+      "SUBMITTED",
+      "REVIEWED",
+      "STAFF_APPROVED",
+      "STAFF_REJECTED",
+      "INTERVIEW_QUEUED",
+      "INTERVIEW_SCHEDULED",
+      "PENDING_FINAL_DECISION",
+      "HIRED",
+      "NOT_HIRED",
+      "ONBOARDING"
     ];
     console.log("ApplicationService instantiated.");
   }
 
-  public async createApplication(
-    applicationData: ApplicationCreationDTO,
-    cvFile: Express.Multer.File
-  ): Promise<CvApplication> {
-    if (!cvFile) throw createError("CV file is required.", 400);
+// src/services/application.service.ts
 
-    const t: Transaction = await sequelize.transaction();
-    let uploadedMinioObjectName: string | null = null;
+  public async createApplication(
+    applicationData: ApplicationCreationDTO,
+    cvFile: Express.Multer.File
+  ): Promise<CvApplication> {
+    if (!cvFile) throw createError("CV file is required.", 400);
 
-    try {
-      const positionId = parseInt(applicationData.appliedPositionId, 10);
-      if (isNaN(positionId)) {
-        throw createError("Valid Applied position ID is required.", 400);
-      }
-      const position = await JobPosition.findOne({
-        where: { id: positionId, status: "Open" },
-        transaction: t,
-      });
-      if (!position) {
-        throw createError(`Position not found or not open.`, 404);
-      }
-      const existingApplication = await CvApplication.findOne({
-        where: {
-          email: applicationData.email,
-          appliedPositionId: position.id,
-          isArchived: false,
-        },
-        transaction: t,
-      });
-      if (existingApplication) {
-        throw createError(
-          `Email ${applicationData.email} has already applied for this position.`,
-          409
-        );
-      }
-      const uploadedFileInfo = await minioService.uploadCvFile(cvFile);
-      uploadedMinioObjectName = uploadedFileInfo.fileName; // (Sepertinya Anda salah, harusnya objectName)
-      // uploadedMinioObjectName = uploadedFileInfo.objectName; // <-- Pastikan ini benar
+    // --- PERBAIKAN 1: Cari lowongan SEBELUM transaksi ---
+    const positionId = parseInt(applicationData.appliedPositionId, 10);
+    if (isNaN(positionId)) {
+        throw createError("Valid Applied position ID is required.", 400);
+    }
+    // Cari di luar transaksi dan gunakan status "OPEN" (UPPERCASE)
+    const position = await JobPosition.findOne({
+        where: { id: positionId, status: "OPEN" },
+    });
+    if (!position) {
+      // Error 404 dilempar sebelum transaksi dimulai
+      throw createError(`Position not found or not open.`, 404);
+    }
+    // --- BATAS PERBAIKAN 1 ---
 
-      const dataToSave = {
-        fullName: applicationData.fullName,
-        email: applicationData.email,
-        qualification: position.name,
-        agreeTerms: applicationData.agreeTerms,
-        cvFileName: uploadedFileInfo.fileName,
-        cvFileObjectKey: uploadedFileInfo.objectName, // <-- Pastikan ini objectName
-        status: "Submitted",
-        appliedPositionId: position.id,
-        interview_notes: null, // <-- 4. TAMBAHKAN DEFAULT NULL
-      };
-      
-      const newApplication = await CvApplication.create(dataToSave as any, {
-        transaction: t,
-      });
-      await t.commit();
-      console.log(
-        `[createApplication] SUCCESS! DB Commit OK. Application ID=${newApplication.id}`
-      );
-      emailService
-        .sendApplicationConfirmation(
-          newApplication.email,
-          newApplication.fullName,
-          newApplication.qualification
-        )
-        .catch((emailError: any) => {
-          console.error(
-            `[Email Confirmation] FAILED to send:`,
-            emailError.message
-          );
-        });
-      const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-      if (n8nWebhookUrl) {
-        axios
-          .post(n8nWebhookUrl, {
-            applicationId: newApplication.id,
-            cvFileObjectKey: uploadedFileInfo.objectName, // <-- Kirim objectName
-          })
-          .then(() => {
-            console.log(
-              `[N8N] Webhook triggered for application ID: ${newApplication.id}`
-            );
-          })
-          .catch((n8nError: any) => {
-            console.error(
-              `[N8N] CRITICAL: Failed to trigger webhook for ID ${newApplication.id}:`,
-              n8nError.message
-            );
-          });
-      } else {
-        console.warn("[N8N] Webhook URL not configured, skipping trigger.");
-      }
-      return newApplication;
-    } catch (error: any) {
-      if (t && !(t as any).finished) {
-        try {
-          await t.rollback();
-          console.log(`[createApplication] Transaction rolled back due to error.`);
-        } catch (rollbackError: any) {
-          console.error("[createApplication] Error during rollback:", rollbackError);
-        }
-      }
-      console.error("[createApplication] ERROR during creation process:", error.message);
-      if (uploadedMinioObjectName) {
-        try {
-          // (Pastikan ini objectName, bukan fileName)
-          await minioService.deleteCvFile(uploadedMinioObjectName); 
-        } catch (cleanupError: any) {
-          console.error(
-            "[createApplication] Failed to cleanup MinIO file:",
-            cleanupError.message
-          );
-        }
-      }
-      if (!error.status) error.status = 500;
-      throw error;
-    }
-  }
+    const t: Transaction = await sequelize.transaction(); // Transaksi baru dimulai di sini
+    let uploadedMinioObjectName: string | null = null;
 
-  // (getAllApplications... tetap sama)
+    try {
+        // --- PERBAIKAN 2: HAPUS pencarian lowongan yang duplikat dari sini ---
+        // (const positionId = ... Dihapus)
+        // (const position = ... Dihapus)
+
+      const existingApplication = await CvApplication.findOne({
+        where: {
+          email: applicationData.email,
+          appliedPositionId: position.id, // <-- Gunakan 'position' dari luar
+          isArchived: false,
+        },
+        transaction: t,
+      });
+      if (existingApplication) {
+        throw createError(
+          `Email ${applicationData.email} has already applied for this position.`,
+          409
+        );
+      }
+      const uploadedFileInfo = await minioService.uploadCvFile(cvFile);
+      uploadedMinioObjectName = uploadedFileInfo.objectName; // (Sudah benar)
+
+      const dataToSave = {
+        fullName: applicationData.fullName,
+        email: applicationData.email,
+        qualification: position.name, // <-- Gunakan 'position' dari luar
+        agreeTerms: applicationData.agreeTerms,
+        cvFileName: uploadedFileInfo.fileName,
+        cvFileObjectKey: uploadedFileInfo.objectName,
+        status: "SUBMITTED", // (Sudah benar)
+        appliedPositionId: position.id, // <-- Gunakan 'position' dari luar
+        interview_notes: null,
+      };
+      
+      const newApplication = await CvApplication.create(dataToSave as any, {
+        transaction: t,
+      });
+      await t.commit();
+      console.log(
+        `[createApplication] SUCCESS! DB Commit OK. Application ID=${newApplication.id}`
+      );
+
+      // (Email confirmation ... sisa kode Anda sudah benar)
+      emailService
+        .sendApplicationConfirmation(
+          newApplication.email,
+          newApplication.fullName,
+          newApplication.qualification
+        )
+        .catch((emailError: any) => {
+          console.error(
+            `[Email Confirmation] FAILED to send:`,
+            emailError.message
+          );
+        });
+
+      // (N8N Webhook trigger ... sisa kode Anda sudah benar)
+      const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+      if (n8nWebhookUrl) {
+        axios
+          .post(n8nWebhookUrl, {
+            applicationId: newApplication.id,
+            cvFileObjectKey: uploadedFileInfo.objectName,
+          })
+          .then(() => {
+            console.log(
+              `[N8N] Webhook triggered for application ID: ${newApplication.id}`
+            );
+          })
+          .catch((n8nError: any) => {
+            console.error(
+              `[N8N] CRITICAL: Failed to trigger webhook for ID ${newApplication.id}:`,
+              n8nError.message
+            );
+          });
+      } else {
+        console.warn("[N8N] Webhook URL not configured, skipping trigger.");
+      }
+      return newApplication;
+
+    } catch (error: any) {
+      // (Catch block ... sisa kode Anda sudah benar)
+      if (t && !(t as any).finished) {
+        try {
+          await t.rollback();
+          console.log(`[createApplication] Transaction rolled back due to error.`);
+        } catch (rollbackError: any) {
+          console.error("[createApplication] Error during rollback:", rollbackError);
+        }
+      }
+      console.error("[createApplication] ERROR during creation process:", error.message);
+      if (uploadedMinioObjectName) {
+        try {
+          await minioService.deleteCvFile(uploadedMinioObjectName); 
+        } catch (cleanupError: any) {
+          console.error(
+            "[createApplication] Failed to cleanup MinIO file:",
+            cleanupError.message
+          );
+        }
+      }
+      if (!error.status) error.status = 500;
+      throw error;
+    }
+  }
+
   public async getAllApplications(): Promise<CvApplication[]> {
     try {
       const applications = await CvApplication.findAll({
@@ -189,7 +199,6 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // (getApplicationById... tetap sama)
   public async getApplicationById(
     applicationId: number
   ): Promise<CvApplication | null> {
@@ -203,7 +212,6 @@ class ApplicationService implements IApplicationService {
     return application;
   }
 
-  // (deleteApplication... tetap sama)
   public async deleteApplication(
     applicationId: number
   ): Promise<{ success: true; message: string }> {
@@ -239,7 +247,6 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // (downloadCvFile... tetap sama)
   public async downloadCvFile(
     applicationId: number
   ): Promise<DownloadFileStream> {
@@ -277,10 +284,9 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // --- 5. PERBARUI FUNGSI INI ---
   public async updateApplicationStatus(
     applicationId: number,
-    updateData: ApplicationStatusUpdateDTO // <-- Terima Objek, bukan string
+    updateData: ApplicationStatusUpdateDTO
   ): Promise<CvApplication> {
     if (isNaN(applicationId))
       throw createError("Invalid application ID.", 400);
@@ -291,7 +297,7 @@ class ApplicationService implements IApplicationService {
 
     const fieldsToUpdate: ("status" | "interview_notes")[] = [];
     
-    // Logika 1: Update Status (jika ada)
+    // Update Status
     if (updateData.status) {
       if (!this.validStatuses.includes(updateData.status)) {
         throw createError(`Invalid status: ${updateData.status}.`, 400);
@@ -301,9 +307,8 @@ class ApplicationService implements IApplicationService {
       console.log(`Service: Updating status to ${updateData.status} for ID ${applicationId}.`);
     }
 
-    // Logika 2: Update Interview Notes (jika ada)
-    if (updateData.interview_notes) {
-      // Menggabungkan notes lama dengan notes baru (jika ada)
+    // ✅ FIX: Cek eksplisit null/undefined, bukan truthy
+    if (updateData.interview_notes !== undefined && updateData.interview_notes !== null) {
       application.interview_notes = {
         ...(application.interview_notes || {}),
         ...updateData.interview_notes,
@@ -312,14 +317,13 @@ class ApplicationService implements IApplicationService {
       console.log(`Service: Updating interview_notes for ID ${applicationId}.`);
     }
 
-    // Cek apakah ada yang di-update
     if (fieldsToUpdate.length === 0) {
        console.warn(`Service: No valid fields to update for ID ${applicationId}.`);
-       return application; // Kembalikan data apa adanya
+       return application;
     }
 
     try {
-      await application.save({ fields: fieldsToUpdate }); // Hanya simpan field yang berubah
+      await application.save({ fields: fieldsToUpdate });
       
       console.log(`Service: Fields [${fieldsToUpdate.join(", ")}] updated for ID ${applicationId}.`);
       
@@ -330,9 +334,7 @@ class ApplicationService implements IApplicationService {
       throw createError(`Failed to update application: ${error.message}`, 500);
     }
   }
-  // --- BATAS PERUBAHAN ---
 
-  // (saveAutomatedAnalysisResult... tetap sama)
   public async saveAutomatedAnalysisResult(
     applicationId: number,
     n8nResult: N8nResultDTO
@@ -359,14 +361,22 @@ class ApplicationService implements IApplicationService {
         );
         return null;
       }
+
+      // ✅ FIX: Prevent overwrite jika sudah di-process
+      if (application.status !== "SUBMITTED") {
+        console.warn(
+          `Application ${applicationId} already processed (status: ${application.status}). Skipping N8N result save.`
+        );
+        return application;
+      }
+
       application.similarity_score = n8nResult.similarity_score;
       application.passed_hard_gate = n8nResult.passed_hard_gate;
       application.qualitative_assessment = n8nResult.qualitative_assessment;
       application.cv_data = n8nResult.cv_data;
       application.requirement_data = n8nResult.requirement_data;
-      if (application.status === "Submitted") {
-        application.status = "Reviewed";
-      }
+      application.status = "REVIEWED";
+
       await application.save({
         fields: [
           "similarity_score",
@@ -392,13 +402,12 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // (getAllArchivedApplications... tetap sama)
   public async getAllArchivedApplications(): Promise<CvApplication[]> {
     try {
       const applications = await CvApplication.findAll({
         where: { isArchived: true },
         order: [["createdAt", "DESC"]],
-        attributes: this.standardAttributes, // <-- Ini akan mengambil interview_notes juga
+        attributes: this.standardAttributes,
       });
       console.log(
         `Service: Fetched ${applications.length} archived applications.`
@@ -410,7 +419,6 @@ class ApplicationService implements IApplicationService {
     }
   }
   
-  // (archiveApplications... tetap sama)
   public async archiveApplications(
     applicationIds: number[]
   ): Promise<{ success: boolean; count: number; message: string }> {
@@ -426,7 +434,7 @@ class ApplicationService implements IApplicationService {
           where: {
             id: { [Op.in]: validIds },
             isArchived: false,
-            status: { [Op.in]: ["Accepted", "Rejected"] },
+            status: { [Op.in]: ["HIRED", "NOT_HIRED", "STAFF_REJECTED"] },
           },
         }
       );
@@ -442,7 +450,6 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // (unarchiveApplications... tetap sama)
   public async unarchiveApplications(
     applicationIds: number[]
   ): Promise<{ success: boolean; count: number; message: string }> {
@@ -468,7 +475,6 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // (bulkDeleteActiveApplications... tetap sama)
   public async bulkDeleteActiveApplications(
     applicationIds: number[]
   ): Promise<{ success: boolean; count: number; message: string }> {
@@ -533,7 +539,6 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // (bulkDownloadCvFiles... tetap sama)
   public async bulkDownloadCvFiles(
     applicationIds: number[]
   ): Promise<{ zipBuffer: Buffer; fileName: string }> {
@@ -598,7 +603,6 @@ class ApplicationService implements IApplicationService {
     return { zipBuffer, fileName: zipFileName };
   }
 
-  // (Dashboard Functions... tetap sama, tapi kita update status 'needReview')
   public async getDashboardSummaryStats(): Promise<object> {
     try {
       const totalCvCount = await CvApplication.count();
@@ -608,16 +612,18 @@ class ApplicationService implements IApplicationService {
       });
       const needReviewCount = await CvApplication.count({
         where: {
-          // Status 'need review' sekarang mencakup semua tahap sebelum wawancara
-          status: { [Op.in]: ["Submitted", "Reviewed"] }, 
+          status: { [Op.in]: ["SUBMITTED", "REVIEWED"] }, 
           isArchived: false,
         },
       });
       const acceptedCvCount = await CvApplication.count({
-        where: { status: "Accepted", isArchived: false },
+        where: { status: "HIRED", isArchived: false },
       });
       const rejectedCvCount = await CvApplication.count({
-        where: { status: "Rejected", isArchived: false },
+        where: { 
+          status: { [Op.in]: ["NOT_HIRED", "STAFF_REJECTED"] }, 
+          isArchived: false 
+        },
       });
       const activePositionsCount =
         await jobPositionService.countOpenPositions();
@@ -646,12 +652,12 @@ class ApplicationService implements IApplicationService {
         group: ["status"],
       });
       const distribution: { [key: string]: number } = {};
-      this.validStatuses.forEach((status) => { // Gunakan this.validStatuses
+      this.validStatuses.forEach((status) => {
         distribution[status] = 0;
       });
       statusCounts.forEach((item: any) => {
-        if (this.validStatuses.includes(item.dataValues.status)) { // Cek jika status valid
-            distribution[item.dataValues.status] = parseInt(
+        if (this.validStatuses.includes(item.dataValues.status)) {
+          distribution[item.dataValues.status] = parseInt(
             item.dataValues.count,
             10
           );
@@ -724,26 +730,16 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  // --- 6. PERBARUI FUNGSI RANKING ---
   public async getRankedApplications(
     filters: RankFiltersDTO = {},
     limit: number = 10
   ): Promise<CvApplication[]> {
     console.log("Service: Fetching ranked applications with filters:", filters);
     try {
-      
       let whereClause: any = {
         isArchived: false,
-        // Tampilkan hanya yang siap diseleksi Manajer
         status: {
-            [Op.in]: [
-                "Reviewed",          // Siap diolah
-                "Interview_Queued",  // Sudah diantrikan
-                "Interview_Scheduled", // Sudah dijadwalkan
-                "Waiting_HR_Final",  // Tahap akhirs
-                "Accepted",          // Sudah di-hire
-                "Rejected",          // Sudah ditolak
-            ],
+          [Op.in]: ["SUBMITTED", "REVIEWED", "STAFF_APPROVED", "INTERVIEW_QUEUED", "INTERVIEW_SCHEDULED", "PENDING_FINAL_DECISION" ,"HIRED", "NOT_HIRED", "ONBOARDING"],
         }, 
         similarity_score: { [Op.ne]: null },
       };
@@ -758,10 +754,8 @@ class ApplicationService implements IApplicationService {
           { qualification: { [likeOp]: `%${lower}%` } },
         ];
       }
-      // Filter status di 'TopRanking' diabaikan, KARENA kita HANYA mau status 'Reviewed'
-      // if (filters.statusFilter) {
-      //   whereClause.status = filters.statusFilter;
-      // }
+      
+      // ✅ Status filter diabaikan karena sudah di-hardcode untuk ranking
       if (filters.qualificationFilter) {
         whereClause.qualification = filters.qualificationFilter;
       }
@@ -785,13 +779,6 @@ class ApplicationService implements IApplicationService {
         attributes: this.standardAttributes,
       });
 
-      if (applications.length > 0) {
-        console.log("--- DEBUG: (SAMPEL getRanked) ---");
-        console.log(
-          `  -> ID ${applications[0].id} interview_notes ada?: ${!!applications[0].interview_notes}`
-        );
-      }
-
       console.log(
         `Service: Found ${applications.length} ranked applications.`
       );
@@ -803,7 +790,6 @@ class ApplicationService implements IApplicationService {
       );
     }
   }
-} // <-- Penutup Class
+}
 
-// Ekspor satu instance (singleton) dari class
 export default new ApplicationService();

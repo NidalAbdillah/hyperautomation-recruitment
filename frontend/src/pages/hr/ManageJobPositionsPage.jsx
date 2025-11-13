@@ -26,10 +26,11 @@ const API_DELETE_POSITION_URL = (id) => `${API_BASE_URL}/api/hr/job-positions/${
 // --- 2. ENDPOINT API BARU (dari routes) ---
 const API_ARCHIVE_POSITIONS_URL = `${API_BASE_URL}/api/hr/job-positions/archive`; 
 
-const STAFF_HR_VISIBLE_STATUS = ["Approved", "Open", "Closed"];
-const POSITION_STATUS_OPTIONS = [ "Draft", "Approved", "Open", "Closed", "Rejected" ];
+const STAFF_HR_VISIBLE_STATUS = ["APPROVED", "OPEN", "CLOSED"];
+const POSITION_STATUS_OPTIONS = [ "DRAFT", "APPROVED", "OPEN", "CLOSED", "REJECTED" ];
 const getAuthToken = () => localStorage.getItem("token");
 const ITEMS_PER_PAGE = 10;
+
 
 function ManageJobPositionsPage() {
   const { user } = useAuth();
@@ -359,7 +360,7 @@ function ManageJobPositionsPage() {
         
         // Filter di frontend: Hanya arsipkan yang 'Closed'
         const positionsToArchive = allPositions.filter(p => 
-          positionIds.includes(p.id) && p.status === 'Closed'
+          positionIds.includes(p.id) && p.status === 'CLOSED'
         );
         const idsToArchive = positionsToArchive.map(p => p.id);
         
@@ -395,7 +396,7 @@ function ManageJobPositionsPage() {
   // Quick Select Handlers
   const handleSelectAll = useCallback(() => setSelectedPositions(processedPositions.filteredAndSortedData.map(p => p.id)), [processedPositions.filteredAndSortedData]);
   const handleSelectNone = useCallback(() => setSelectedPositions([]), []);
-  const handleSelectClosed = useCallback(() => setSelectedPositions(processedPositions.filteredAndSortedData.filter(p => p.status === 'Closed').map(p => p.id)), [processedPositions.filteredAndSortedData]);
+ const handleSelectClosed = useCallback(() => setSelectedPositions(processedPositions.filteredAndSortedData.filter(p => p.status === 'CLOSED').map(p => p.id)), [processedPositions.filteredAndSortedData]);
 
 
   // (Tampilan loading/error)
@@ -439,19 +440,19 @@ function ManageJobPositionsPage() {
               {user?.role === "staff_hr" && (
                 <>
                   <option value="">All (Approved, Open, Closed)</option>
-                  <option value="Approved">Approved (To-Do)</option>
-                  <option value="Open">Open (Published)</option>
-                  <option value="Closed">Closed</option>
+                  <option value="APPROVED">Approved (To-Do)</option>
+                  <option value="OPEN">OPEN (Published)</option>
+                  <option value="CLOSED">Closed</option>
                 </>
               )}
               {user?.role === "manager" && (
                 <>
                   <option value="">All My Requests</option>
-                  <option value="Draft">Draft</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Open">Open</option>
-                  <option value="Closed">Closed</option>
-                  <option value="Rejected">Rejected</option>
+                  <option value="DRAFT">Draft</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="OPEN">OPEN</option>
+                  <option value="CLOSED">Closed</option>
+                  <option value="REJECTED">Rejected</option>
                 </>
               )}
             </select>

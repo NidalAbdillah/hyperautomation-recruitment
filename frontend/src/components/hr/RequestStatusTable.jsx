@@ -13,27 +13,27 @@ const StatusBadge = ({ status }) => {
 
   // Sesuaikan dengan ENUM di jobPosition.model.ts
   switch (status) {
-    case 'Draft':
+    case 'DRAFT':
       bgColor = "bg-yellow-100";
       textColor = "text-yellow-800";
       label = "Menunggu Persetujuan HR";
       break;
-    case 'Approved':
+    case 'APPROVED':
       bgColor = "bg-blue-100";
       textColor = "text-blue-800";
       label = "Disetujui (Menunggu Staff HR)";
       break;
-    case 'Open':
+    case 'OPEN':
       bgColor = "bg-green-100";
       textColor = "text-green-800";
       label = "Dipublikasikan (Open)";
       break;
-    case 'Closed':
+    case 'CLOSED':
       bgColor = "bg-gray-200";
       textColor = "text-gray-800";
       label = "Ditutup (Closed)";
       break;
-    case 'Rejected':
+    case 'REJECTED':
       bgColor = "bg-red-100";
       textColor = "text-red-800";
       label = "Ditolak";

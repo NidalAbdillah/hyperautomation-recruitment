@@ -47,7 +47,7 @@ function ApprovePositionsPage() {
       
       // Ini adalah "Defense" (Pertahanan) TA Anda: Filter di Frontend
       // Kita HANYA menampilkan yang statusnya "Draft"
-      const drafts = response.data.filter(pos => pos.status === 'Draft');
+      const drafts = response.data.filter(pos => pos.status === 'DRAFT');
       
       setDraftPositions(drafts);
       
@@ -75,8 +75,8 @@ function ApprovePositionsPage() {
    * Handler (Penangan) untuk memproses persetujuan (Approve/Reject)
    */
   const handleApprovalAction = async (position, newStatus) => {
-    const actionText = newStatus === 'Approved' ? 'Menyetujui' : 'Menolak';
-    const actionSuccessText = newStatus === 'Approved' ? 'disetujui' : 'ditolak';
+    const actionText = newStatus === 'APPROVED' ? 'Menyetujui' : 'Menolak';
+    const actionSuccessText = newStatus === 'APPROVED' ? 'disetujui' : 'ditolak';
 
     Notiflix.Confirm.show(
       `Konfirmasi ${actionText} Lowongan`,
@@ -120,11 +120,11 @@ function ApprovePositionsPage() {
   };
   
   const handleApprove = (position) => {
-    handleApprovalAction(position, 'Approved');
+    handleApprovalAction(position, 'APPROVED');
   };
 
   const handleReject = (position) => {
-    handleApprovalAction(position, 'Rejected');
+    handleApprovalAction(position, 'REJECTED');
   };
   
   // Handler (Penangan) untuk "View Details" (Lihat Detail) (sesuai permintaan Anda)

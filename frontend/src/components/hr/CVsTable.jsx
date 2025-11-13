@@ -23,12 +23,19 @@ const Tooltip = ({ text, children }) => {
 };
 
 // Color mappings
-const STATUS_COLOR_MAP = {
-  Submitted: "bg-blue-100 text-blue-800",
-  Reviewed: "bg-yellow-100 text-yellow-800",
-  Accepted: "bg-green-100 text-green-800",
-  Rejected: "bg-red-100 text-red-800",
+const STATUS_DISPLAY_MAP = {
+  "SUBMITTED":    { label: "Submitted", color: "bg-gray-100 text-gray-800" },
+  "REVIEWED":     { label: "Reviewed (AI)", color: "bg-blue-100 text-blue-800" },
+  "STAFF_APPROVED": { label: "Approved (Staff)", color: "bg-cyan-100 text-cyan-800" },
+  "STAFF_REJECTED": { label: "Rejected (Staff)", color: "bg-red-100 text-red-800" },
+  "INTERVIEW_QUEUED":    { label: "In Queue (Manager)", color: "bg-yellow-100 text-yellow-800" },
+  "INTERVIEW_SCHEDULED": { label: "Scheduled (Manager)", color: "bg-purple-100 text-purple-800" },
+  "PENDING_FINAL_DECISION": { label: "Final Review (HR)", color: "bg-indigo-100 text-indigo-800" },
+  "HIRED":      { label: "Hired", color: "bg-green-100 text-green-800" },
+  "NOT_HIRED":  { label: "Not Hired", color: "bg-red-100 text-red-800" },
+  "ONBOARDING": { label: "Onboarding", color: "bg-green-100 text-green-800" },
 };
+const defaultStatusDisplay = { label: "Unknown", color: "bg-gray-100 text-gray-800" };
 
 const RECOMMENDATION_COLOR_MAP = {
   "HIGHLY RECOMMENDED": "text-green-700 font-semibold",
@@ -73,8 +80,8 @@ function CVsTable({
   // Handler for status dropdown change
   const handleDropdownStatusChange = (cv, event) => {
     const newStatus = event.target.value;
-    const isDisabled = cv.status === "Submitted" || !cv.qualitative_assessment;
-    if (!isDisabled && (newStatus === "Accepted" || newStatus === "Rejected") && onStatusChangeDirectly) {
+    const isDisabled = cv.status !== "REVIEWED";
+    if (!isDisabled && (newStatus === "STAFF_APPROVED" || newStatus === "STAFF_REJECTED") && onStatusChangeDirectly) {
       onStatusChangeDirectly(cv, newStatus);
     } else {
       console.warn("Dropdown change ignored. Status:", newStatus, "IsDisabled:", isDisabled);
@@ -166,7 +173,7 @@ function CVsTable({
           <tbody className="bg-white divide-y divide-gray-200">
             {data && data.length > 0 ? (
               data.map((cv, index) => {
-                const isStatusDropdownDisabled = cv.status === "Submitted" || !cv.qualitative_assessment;
+                const isStatusDropdownDisabled = cv.status !== "REVIEWED";
                 const rowNumber = firstItemIndex + index;
                 const assessment = cv.qualitative_assessment;
                 const recommendation = assessment?.final_recommendation || "N/A";
@@ -220,9 +227,14 @@ function CVsTable({
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${STATUS_COLOR_MAP[cv.status] || "bg-gray-100 text-gray-800"}`}>
-                        {cv.status}
-                      </span>
+                      {(() => {
+                        const statusInfo = STATUS_DISPLAY_MAP[cv.status] || defaultStatusDisplay;
+                        return (
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                       <div className="flex items-center justify-center space-x-3">
@@ -247,7 +259,7 @@ function CVsTable({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <select
                         aria-label={`Update status for ${cv.fullName}`}
-                        value={(cv.status === "Accepted" || cv.status === "Rejected") ? cv.status : ""}
+                        value={(cv.status === "STAFF_APPROVED" || cv.status === "STAFF_REJECTED") ? cv.status : ""}
                         onChange={(e) => handleDropdownStatusChange(cv, e)}
                         disabled={isStatusDropdownDisabled}
                         className={`block w-full pl-3 pr-8 py-1 border text-xs rounded-md focus:outline-none focus:ring-1 ${
@@ -256,13 +268,13 @@ function CVsTable({
                             : "bg-white border-gray-300 text-gray-700 focus:ring-red-500 focus:border-red-500 hover:border-gray-400"
                         }`}
                       >
-                        {!(cv.status === "Accepted" || cv.status === "Rejected") && (
+                        {!(cv.status === "STAFF_APPROVED" || cv.status === "STAFF_REJECTED") && (
                           <option value="" disabled>
                             Pilih Status...
                           </option>
                         )}
-                        <option value="Accepted">Accepted</option>
-                        <option value="Rejected">Rejected</option>
+                        <option value="STAFF_APPROVED">Approved (staff)</option>
+                        <option value="STAFF_REJECTED">Rejected (staff)</option>
                       </select>
                     </td>
                   </tr>

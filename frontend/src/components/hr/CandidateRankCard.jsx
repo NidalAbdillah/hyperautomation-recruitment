@@ -12,6 +12,9 @@ import {
   ChevronRightIcon,
   TrophyIcon,
   ChatBubbleLeftRightIcon,
+  DocumentTextIcon,
+  XMarkIcon,
+  ClockIcon, // <-- ✅ Impor ikon 'Jam'
 } from "@heroicons/react/24/outline";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -31,28 +34,20 @@ const RANK_COLOR_MAP = {
   3: "text-amber-600",
 };
 
-// --- ✅ PERBAIKAN 1: TAMBAHKAN PETA STATUS DI SINI ---
-// Ini akan mendefinisikan warna dan label untuk setiap status
+// Peta Status
 const STATUS_DISPLAY_MAP = {
-  Reviewed: { label: "Reviewed", color: "bg-blue-100 text-blue-800" },
-  Interview_Queued: {
-    label: "In Queue",
-    color: "bg-yellow-100 text-yellow-800",
-  },
-  Interview_Scheduled: {
-    label: "Scheduled",
-    color: "bg-purple-100 text-purple-800",
-  },
-  Waiting_HR_Final: {
-    label: "Final Review",
-    color: "bg-indigo-100 text-indigo-800",
-  },
-  Accepted: { label: "Accepted", color: "bg-green-100 text-green-800" },
-  Rejected: { label: "Rejected", color: "bg-red-100 text-red-800" },
+  "SUBMITTED":    { label: "Submitted", color: "bg-gray-100 text-gray-800" },
+  "REVIEWED":     { label: "Reviewed (AI)", color: "bg-blue-100 text-blue-800" },
+  "STAFF_APPROVED": { label: "Approved (Staff)", color: "bg-cyan-100 text-cyan-800" },
+  "STAFF_REJECTED": { label: "Rejected (Staff)", color: "bg-red-100 text-red-800" },
+  "INTERVIEW_QUEUED":    { label: "In Queue (Manager)", color: "bg-yellow-100 text-yellow-800" },
+  "INTERVIEW_SCHEDULED": { label: "Scheduled (Manager)", color: "bg-purple-100 text-purple-800" },
+  "PENDING_FINAL_DECISION": { label: "Final Review (HR)", color: "bg-indigo-100 text-indigo-800" },
+  "HIRED":      { label: "Hired", color: "bg-green-100 text-green-800" },
+  "NOT_HIRED":  { label: "Not Hired", color: "bg-red-100 text-red-800" },
+  "ONBOARDING": { label: "Onboarding", color: "bg-green-100 text-green-800" },
 };
-// Status default jika tidak ditemukan di peta
 const defaultStatusDisplay = { label: "N/A", color: "bg-gray-100 text-gray-800" };
-// --- BATAS PERBAIKAN 1 ---
 
 function CandidateRankCard({
   cv,
@@ -60,6 +55,7 @@ function CandidateRankCard({
   onViewDetail,
   userRole,
   onSelectForInterview,
+  onClearInterviewChoice, // <-- Pastikan prop ini ada
 }) {
   const [numPages, setNumPages] = useState(null);
   const [pageNumber, setPageNumber] = useState(1);
@@ -69,7 +65,7 @@ function CandidateRankCard({
 
   const assessment = cv.qualitative_assessment;
 
-  // (useEffect untuk fetch PDF... tidak ada perubahan)
+  // (useEffect... tidak ada perubahan)
   useEffect(() => {
     const abortController = new AbortController();
     setIsLoadingPreview(true);
@@ -121,8 +117,6 @@ function CandidateRankCard({
       abortController.abort();
     };
   }, [cv.id, cv.cvFileObjectKey]);
-
-  // (useEffect untuk revoke URL... tidak ada perubahan)
   useEffect(() => {
     return () => {
       if (pdfPreviewUrl) {
@@ -131,28 +125,24 @@ function CandidateRankCard({
     };
   }, [pdfPreviewUrl]);
 
-  // (Semua handler dan helper... tidak ada perubahan)
+  // (Handlers... tidak ada perubahan)
   const onDocumentLoadSuccess = ({ numPages: nextNumPages }) => {
     setNumPages(nextNumPages);
     setPageNumber(1);
   };
-
   const onDocumentLoadError = (err) => {
     console.error("PDF Preview Error:", err);
     setPreviewError("Failed to render PDF. File might be corrupted.");
     setIsLoadingPreview(false);
   };
-
   const handlePreviousPage = (e) => {
     e.stopPropagation();
     setPageNumber((prev) => Math.max(prev - 1, 1));
   };
-
   const handleNextPage = (e) => {
     e.stopPropagation();
     setPageNumber((prev) => Math.min(prev + 1, numPages));
   };
-
   const renderList = (items, title) => {
     if (!items || !Array.isArray(items) || items.length === 0) return null;
     return (
@@ -168,7 +158,6 @@ function CandidateRankCard({
       </div>
     );
   };
-
   const handleSelectClick = (e) => {
     e.stopPropagation();
     if (typeof onSelectForInterview === "function") {
@@ -177,7 +166,6 @@ function CandidateRankCard({
       console.warn("onSelectForInterview is not a function");
     }
   };
-
   const handleViewDetails = (e) => {
     e.stopPropagation();
     if (typeof onViewDetail === "function") {
@@ -186,15 +174,59 @@ function CandidateRankCard({
       console.warn("onViewDetail is not a function");
     }
   };
+  const handleClearClick = (e) => {
+    e.stopPropagation();
+    if (typeof onClearInterviewChoice === "function") {
+      onClearInterviewChoice(cv);
+    } else {
+      console.warn("onClearInterviewChoice is not a function");
+    }
+  };
+  // --- BATAS HANDLER ---
 
-  // Logika tombol Anda sudah benar
-  const showSelectButton = userRole === "manager" && cv.status === "Reviewed";
+
+  // --- ✅ PERBAIKAN LOGIKA TOMBOL (Staff HR First) ---
+  
+  // 1. Status di mana Manajer bisa mengambil tindakan (memilih/undo)
+const isActionableStatus = [
+    "STAFF_APPROVED",
+    "INTERVIEW_QUEUED", // <-- PERBAIKAN
+    "INTERVIEW_SCHEDULED", // <-- PERBAIKAN
+    "PENDING_FINAL_DECISION", // <-- PERBAIKAN
+  ].includes(cv.status);
+
+  // 2. Status di mana CV masih menunggu HR (Bypass dicegah)
+  const isWaitingHR = cv.status === "REVIEWED"; // (Sudah benar)
+  
+  // 3. Status di mana proses sudah selesai
+  const isFinalStatus = [
+    "STAFF_REJECTED", 
+    "HIRED", 
+    "NOT_HIRED", 
+    "ONBOARDING"
+  ].includes(cv.status); // <-- PERBAIKAN (Lebih lengkap)
+
+  // 4. Ambil preferensi Manajer
+  const managerPreference = cv.interview_notes?.preference;
+  
+  // 5. Tampilkan grup tombol manajer jika:
+  //    - User adalah 'manager'
+  //    - DAN Statusnya BUKAN 'STAFF_Rejected'
+  const showManagerActions = userRole === "manager" && !isFinalStatus;
+
+  // 6. Tentukan warna tombol "Choice"
+  const choiceButtonColor = managerPreference
+    ? "bg-gray-500 hover:bg-gray-600 focus:ring-gray-400" // Abu-abu (Sudah diisi)
+    : "bg-green-600 hover:bg-green-700 focus:ring-green-500"; // Hijau (Belum diisi)
+
+  // --- BATAS PERBAIKAN LOGIKA ---
 
   return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 overflow-hidden flex flex-col transition-shadow duration-300 hover:shadow-xl">
-      {/* Card Header */}
-      <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center gap-2">
-        <div className="flex items-center gap-3 min-w-0">
+      {/* Header Kartu */}
+      <div className="p-3 bg-gray-50 border-b border-gray-200 flex justify-between items-center gap-4">
+        {/* Kolom Kiri: Peringkat dan Nama */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <TrophyIcon
             className={`h-6 w-6 flex-shrink-0 ${
               RANK_COLOR_MAP[rank] || "text-gray-400"
@@ -217,42 +249,50 @@ function CandidateRankCard({
           </div>
         </div>
 
-        {/* --- ✅ PERBAIKAN 2: TAMBAHKAN BADGE STATUS DI SINI --- */}
-        {/* Ini adalah badge yang akan menampilkan status saat ini */}
-        <div className="flex-shrink-0">
-          {(() => {
-            const statusInfo =
-              STATUS_DISPLAY_MAP[cv.status] || defaultStatusDisplay;
-            return (
-              <span
-                className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${statusInfo.color}`}
-                title={`Current Status: ${cv.status.replace("_", " ")}`}
-              >
-                {statusInfo.label}
-              </span>
-            );
-          })()}
-        </div>
-        {/* --- BATAS PERBAIKAN 2 --- */}
+        {/* --- ✅ PERBAIKAN RENDER TOMBOL KANAN --- */}
+        <div className="flex flex-col sm:flex-row items-center gap-2 flex-shrink-0 ml-2">
+          
+          {/* Tombol 'Details' (Selalu ada untuk semua role) */}
+          <button
+            onClick={handleViewDetails}
+            title="Open Full Details"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 whitespace-nowrap flex items-center gap-1.5"
+          >
+            <DocumentTextIcon className="h-4 w-4" />
+            Details
+          </button>
 
-        <div className="flex-shrink-0 ml-2">
-          {showSelectButton ? (
-            <button
-              onClick={handleSelectClick}
-              className="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 whitespace-nowrap flex items-center gap-1.5"
-            >
-              <ChatBubbleLeftRightIcon className="h-4 w-4" />
-              Pilih untuk Wawancara
-            </button>
-          ) : (
-            <button
-              onClick={handleViewDetails}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold py-1.5 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 whitespace-nowrap"
-            >
-              Open Details
-            </button>
+          {/* Grup Tombol Manajer */}
+          {showManagerActions && (
+            <div className="flex items-center gap-1">
+              
+              {/* Tombol "Choice" (Hanya muncul jika statusnya Actionable) */}
+              {isActionableStatus && (
+                <button
+                  onClick={handleSelectClick}
+                  title={managerPreference ? `Ubah Pilihan (Saat ini: ${managerPreference})` : "Pilih Tipe Wawancara"}
+                  className={`text-white text-xs font-bold py-1.5 px-3 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 whitespace-nowrap flex items-center gap-1.5 transition-colors ${choiceButtonColor}`}
+                >
+                  <ChatBubbleLeftRightIcon className="h-4 w-4" />
+                  Choice to Interview Test
+                </button>
+              )}
+
+              {/* Tombol "Clear" (Hanya muncul jika status Actionable & sudah memilih) */}
+              {isActionableStatus && managerPreference && (
+                 <button
+                   onClick={handleClearClick}
+                   title="Bersihkan Pilihan (Undo)"
+                   className="p-1.5 rounded-md text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                 >
+                   <XMarkIcon className="h-4 w-4" />
+                 </button>
+              )}
+            </div>
           )}
+          
         </div>
+        {/* --- BATAS PERBAIKAN RENDER --- */}
       </div>
 
       {/* Card Body */}
@@ -263,17 +303,16 @@ function CandidateRankCard({
             className="flex-grow overflow-hidden flex justify-center items-center relative"
             style={{ minHeight: "350px" }}
           >
+            {/* ... (Kode PDF viewer tidak berubah) ... */}
             {isLoadingPreview && (
               <div className="text-xs text-gray-500">Loading Preview...</div>
             )}
-
             {previewError && (
               <div className="text-xs text-red-500 p-4 text-center">
                 <InformationCircleIcon className="h-6 w-6 mx-auto mb-1" />
                 {previewError}
               </div>
             )}
-
             {pdfPreviewUrl && !previewError && !isLoadingPreview && (
               <Document
                 file={pdfPreviewUrl}
@@ -293,9 +332,9 @@ function CandidateRankCard({
               </Document>
             )}
           </div>
-
           {numPages > 1 && !previewError && (
             <div className="flex justify-between items-center p-1.5 border-t border-gray-200 bg-white text-xs">
+              {/* ... (Kode Paginasi PDF tidak berubah) ... */}
               <button
                 onClick={handlePreviousPage}
                 disabled={pageNumber <= 1}
@@ -317,10 +356,12 @@ function CandidateRankCard({
           )}
         </div>
 
-        {/* Analysis Data (Tidak ada perubahan) */}
+        {/* Panel Analisis */}
         <div className="w-full md:w-3/5 p-4 overflow-y-auto space-y-4">
+          {/* Skor & Rekomendasi (Tidak berubah) */}
           <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
+             {/* ... (Kode Similarity, Recommendation, Gate tidak berubah) ... */}
+             <div>
               <label className="block text-xs font-medium text-gray-500">
                 Similarity
               </label>
@@ -330,7 +371,6 @@ function CandidateRankCard({
                   : "N/A"}
               </p>
             </div>
-
             <div>
               <label className="block text-xs font-medium text-gray-500">
                 Recommendation
@@ -345,7 +385,6 @@ function CandidateRankCard({
                 {assessment?.final_recommendation?.replace(/_/g, " ") || "N/A"}
               </p>
             </div>
-
             <div>
               <label className="block text-xs font-medium text-gray-500">
                 Mandatory Gate
@@ -362,8 +401,55 @@ function CandidateRankCard({
             </div>
           </div>
 
+          {/* Blok Status (Sudah benar) */}
+          <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-2">
+             <div>
+              <label className="block text-xs font-medium text-gray-500">
+                Status
+              </label>
+              {(() => {
+                const statusInfo =
+                  STATUS_DISPLAY_MAP[cv.status] || defaultStatusDisplay;
+                return (
+                  <span
+                    className={`text-sm font-semibold px-2.5 py-0.5 rounded-full ${statusInfo.color}`}
+                  >
+                    {statusInfo.label}
+                  </span>
+                );
+              })()}
+            </div>
+            
+            {/* --- ✅ PERBAIKAN: Tampilkan "Waiting" jika status REVIEWED --- */}
+            {isWaitingHR && userRole === 'manager' && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500">
+                  Manager Action
+                </label>
+                <p className="text-sm font-semibold text-gray-500 flex items-center">
+                   <ClockIcon className="h-4 w-4 mr-1.5" />
+                   Waiting for Staff HR Review
+                </p>
+              </div>
+            )}
+            
+            {/* Tampilkan Pilihan Manajer jika sudah ada */}
+            {managerPreference && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500">
+                  Manager Request to HR
+                </label>
+                <p className="text-sm font-semibold text-gray-800">
+                  {managerPreference}
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Blok AI Assessment (Tidak berubah) */}
           {assessment ? (
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-3">
+              {/* ... (Kode AI Assessment tidak berubah) ... */}
               <div>
                 <label className="block text-xs font-medium text-gray-500">
                   AI Assessment

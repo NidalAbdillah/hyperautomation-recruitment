@@ -136,10 +136,13 @@ function ArchiveCenterPage() {
     const qualifications = (allCvData || []).map((item) => item.qualification).filter(Boolean);
     return ["", ...new Set(qualifications)];
   }, [allCvData]);
-  const availableCvStatuses = useMemo(() => {
-    const statuses = (allCvData || []).map((item) => item.status).filter(Boolean);
-    return ["", ...new Set(statuses)];
-  }, [allCvData]);
+  const availableCvStatuses = useMemo(() => [
+    { value: "", label: "All Status" },
+    { value: "STAFF_APPROVED", label: "Approved (Staff)" },
+    { value: "STAFF_REJECTED", label: "Rejected (Staff)" },
+    { value: "HIRED", label: "Hired" },
+    { value: "NOT_HIRED", label: "Not Hired" },
+  ], []);
 
   // --- CV: Processed Data ---
   const processedCvData = useMemo(() => {
@@ -598,8 +601,8 @@ function ArchiveCenterPage() {
   // CV Quick Select
   const handleSelectAllCVs = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.map((cv) => cv.id)), [processedCvData.filteredAndSortedData]);
   const handleSelectNoneCVs = useCallback(() => setSelectedCVs([]), []);
-  const handleSelectAcceptedCVs = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter((cv) => cv.status === "Accepted").map((cv) => cv.id)), [processedCvData.filteredAndSortedData]);
-  const handleSelectRejectedCVs = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter((cv) => cv.status === "Rejected").map((cv) => cv.id)), [processedCvData.filteredAndSortedData]);
+  const handleSelectAcceptedCVs = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter((cv) => cv.status === "STAFF_APPROVED").map((cv) => cv.id)), [processedCvData.filteredAndSortedData]);
+  const handleSelectRejectedCVs = useCallback(() => setSelectedCVs(processedCvData.filteredAndSortedData.filter((cv) => cv.status === "STAFF_REJECTED").map((cv) => cv.id)), [processedCvData.filteredAndSortedData]);
   // Position Quick Select
   const handleSelectAllPositions = useCallback(() => setSelectedPositions(processedPositionData.filteredAndSortedData.map((pos) => pos.id)), [processedPositionData.filteredAndSortedData]);
   const handleSelectNonePositions = useCallback(() => setSelectedPositions([]), []);
@@ -660,7 +663,7 @@ function ArchiveCenterPage() {
             <div className="relative w-full sm:w-auto">
               <select value={statusFilter} onChange={handleStatusFilterChange} className="shadow-sm border border-gray-300 rounded w-full py-2 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500 pr-8 appearance-none">
                 <option value="">All Status</option>
-                {availableCvStatuses.filter((s) => s).map((s) => (<option key={s} value={s}>{s}</option>))}
+                {availableCvStatuses.map((s) => (<option key={s.value} value={s.value}>{s.label}</option>))}
               </select>
               <ChevronDownIcon className="h-4 w-4 pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500" />
             </div>
@@ -713,8 +716,8 @@ function ArchiveCenterPage() {
             <span className="text-sm font-medium text-gray-600 mr-2">CV Quick Select:</span>
             <button onClick={handleSelectAllCVs} className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100">All ({processedCvData.filteredAndSortedData.length})</button>
             <button onClick={handleSelectNoneCVs} disabled={selectedCVs.length === 0} className="px-2 py-1 text-xs border rounded bg-white hover:bg-gray-100 disabled:opacity-50">None</button>
-            <button onClick={handleSelectAcceptedCVs} className="px-2 py-1 text-xs border rounded bg-white hover:bg-green-50 text-green-700">Accepted</button>
-            <button onClick={handleSelectRejectedCVs} className="px-2 py-1 text-xs border rounded bg-white hover:bg-red-50 text-red-700">Rejected</button>
+            <button onClick={handleSelectAcceptedCVs} className="px-2 py-1 text-xs border rounded bg-white hover:bg-green-50 text-green-700">STAFF_APPROVED</button>
+            <button onClick={handleSelectRejectedCVs} className="px-2 py-1 text-xs border rounded bg-white hover:bg-red-50 text-red-700">STAFF_REJECTED</button>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {selectedCVs.length > 0 ? (

@@ -24,11 +24,18 @@ const Tooltip = ({ text, children }) => {
 };
 
 // Color mappings
-const STATUS_COLOR_MAP = {
-  Submitted: "bg-blue-100 text-blue-800",
-  Reviewed: "bg-yellow-100 text-yellow-800",
-  Accepted: "bg-green-100 text-green-800",
-  Rejected: "bg-red-100 text-red-800",
+const STATUS_DISPLAY_MAP = {
+  "SUBMITTED":    { label: "Submitted", color: "bg-gray-100 text-gray-800" },
+  "REVIEWED":     { label: "Reviewed (AI)", color: "bg-blue-100 text-blue-800" },
+  "STAFF_APPROVED": { label: "Approved (Staff)", color: "bg-cyan-100 text-cyan-800" },
+  "STAFF_REJECTED": { label: "Rejected (Staff)", color: "bg-red-100 text-red-800" },
+  "INTERVIEW_QUEUED":    { label: "In Queue (Manager)", color: "bg-yellow-100 text-yellow-800" },
+  "INTERVIEW_SCHEDULED": { label: "Scheduled (Manager)", color: "bg-purple-100 text-purple-800" },
+  "PENDING_FINAL_DECISION": { label: "Final Review (HR)", color: "bg-indigo-100 text-indigo-800" },
+  "HIRED":      { label: "Hired", color: "bg-green-100 text-green-800" },
+  "NOT_HIRED":  { label: "Not Hired", color: "bg-red-100 text-red-800" },
+  "ONBOARDING": { label: "Onboarding", color: "bg-green-100 text-green-800" },
+  "default":    { label: "Unknown", color: "bg-gray-100 text-gray-800" }
 };
 
 const RECOMMENDATION_COLOR_MAP = {
@@ -205,9 +212,14 @@ function ArchivedCVsTable({
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${STATUS_COLOR_MAP[cv.status] || "bg-gray-100 text-gray-800"}`}>
-                        {cv.status}
-                      </span>
+                      {(() => {
+                        const statusInfo = STATUS_DISPLAY_MAP[cv.status] || STATUS_DISPLAY_MAP["default"];
+                        return (
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.color}`}>
+                            {statusInfo.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
                       <div className="flex items-center justify-center space-x-3">

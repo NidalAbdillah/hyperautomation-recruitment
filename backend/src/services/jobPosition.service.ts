@@ -32,7 +32,7 @@ class JobPositionService implements IJobPositionService {
     try {
       const openPositions = await JobPosition.findAll({
         where: {
-          status: "Open",
+          status: "OPEN",
           registrationStartDate: { [Op.lte]: new Date() },
           registrationEndDate: { [Op.gte]: new Date() },
           isArchived: false,
@@ -165,7 +165,7 @@ class JobPositionService implements IJobPositionService {
     try {
       const dataToCreate = {
         ...positionData,
-        status: "Draft",
+        status: "DRAFT",
         requestedById: requestor.id,
         isArchived: false,
       };
@@ -279,7 +279,7 @@ class JobPositionService implements IJobPositionService {
     try {
       const count = await JobPosition.count({
         where: {
-          status: "Open",
+          status: "OPEN",
           registrationStartDate: { [Op.lte]: new Date() },
           registrationEndDate: { [Op.gte]: new Date() },
           isArchived: false,
@@ -314,7 +314,7 @@ class JobPositionService implements IJobPositionService {
         {
           where: {
             id: { [Op.in]: positionIds },
-            status: "Closed", 
+            status: "CLOSED", 
             isArchived: false,
           },
         }
