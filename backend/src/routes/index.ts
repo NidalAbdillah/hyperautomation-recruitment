@@ -8,6 +8,7 @@ import usersRouter from "./users.routes";
 import authRoutes from "./auth.routes";
 import dashboardRoutes from "./dashboard.routes";
 import { publicJobPositionRoutes, adminJobPositionRoutes } from "./jobPosition.routes";
+import scheduleRoutes from "./schedule.routes";
 
 const router: Router = express.Router();
 
@@ -25,6 +26,7 @@ adminRouter.use("/users", usersRouter);
 adminRouter.use("/dashboard", dashboardRoutes);
 adminRouter.use("/applications", applicationsAdminRouter);
 adminRouter.use("/job-positions", adminJobPositionRoutes);
+adminRouter.use("/schedules", scheduleRoutes);
 
 // Pasang adminRouter utama
 router.use("/hr", adminRouter);

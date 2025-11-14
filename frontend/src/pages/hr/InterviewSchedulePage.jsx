@@ -121,11 +121,15 @@ function InterviewSchedulePage() {
         applicationId,
         { 
           status: newStatus, 
-          interview_notes: {
-            ...(selectedCandidate.interview_notes || {}),
-            scheduled_time: scheduleData.dateTime,
-            scheduled_by: user.name,
-            schedule_notes: scheduleData.notes_from_hr
+          interview_notes: {
+            ...(selectedCandidate.interview_notes || {}),
+            scheduled_time: scheduleData.dateTime,
+            scheduled_end_time: scheduleData.endTime, // (Sudah benar dari sebelumnya)
+            scheduled_by: user.name,
+            // --- ✅ PERBAIKAN LOGIKA PENYIMPANAN ---
+            // 'notes_from_hr' adalah versi final (mungkin sudah diedit HR)
+            // Kita timpa 'manager_notes_for_candidate' dengan versi baru ini.
+            manager_notes_for_candidate: scheduleData.notes_from_hr
           }
         },
         `Simulasi Penjadwalan Berhasil! (Status diubah ke ${newStatus})`

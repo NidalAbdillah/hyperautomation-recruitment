@@ -21,6 +21,7 @@ import TopRankingPage from "./pages/hr/TopRankingPage.jsx";
 import RequestPositionPage from "./pages/hr/RequestPositionPage.jsx"; // <-- Halaman baru untuk Manager
 import ApprovePositionsPage from "./pages/hr/ApprovePositionsPage.jsx"; // <-- (Kita tambahkan ini sekalian)
 import InterviewSchedulePage from "./pages/hr/InterviewSchedulePage.jsx"; // <-- (Kita tambahkan ini sekalian)
+import SchedulePage from "./pages/hr/SchedulePage.jsx";
 // --- BATAS PERBAIKAN 1 ---
 
 // Layouts
@@ -100,6 +101,7 @@ function App() {
           {/* Grup 3: Manajemen Lowongan (Sesuai Alur 3-Status) */}
           <Route path="request-position" element={<RequestPositionPage />} />
           <Route path="approve-positions" element={<ApprovePositionsPage />} />
+          <Route path="event-calendar" element={<SchedulePage />} />
           <Route path="manage-job-openings" element={<ManageJobPositionsPage />} />
           
           {/* Grup 4: Administrasi Sistem */}

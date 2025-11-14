@@ -5,6 +5,7 @@ import Notiflix from "notiflix";
 import PdfViewerModal from "../../components/PdfViewerModal";
 import CandidateRankCard from "../../components/hr/CandidateRankCard";
 import { useAuth } from "../../context/AuthContext";
+import ManagerSelectModal from "../../components/hr/ManagerSelectModal"; // <-- 1. IMPORT MODAL BARU
 
 import {
   ChevronDownIcon,
@@ -17,14 +18,11 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useNavigate } from "react-router-dom";
 
-// --- API Endpoints ---
+// --- (API Endpoints & Helper... tetap sama) ---
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_GET_RANKING_URL = `${API_BASE_URL}/api/hr/applications/ranking`;
 const API_VIEW_URL = (id) => `${API_BASE_URL}/api/hr/applications/${id}/view-cv`;
-const API_UPDATE_STATUS_URL = (id) =>
-  `${API_BASE_URL}/api/hr/applications/${id}/status`;
-
-// --- Helper ---
+const API_UPDATE_STATUS_URL = (id) =>`${API_BASE_URL}/api/hr/applications/${id}/status`;
 const getAuthToken = () => localStorage.getItem("token");
 
 function TopRankingPage() {
@@ -35,10 +33,17 @@ function TopRankingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // (State... tetap sama)
+  // State Modal CV Viewer (Lama)
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfUrlToView, setPdfUrlToView] = useState(null);
   const [viewingCv, setViewingCv] = useState(null);
+  
+  // --- 2. STATE BARU UNTUK MODAL SELEKSI MANAJER ---
+  const [showSelectModal, setShowSelectModal] = useState(false);
+  const [candidateToSelect, setCandidateToSelect] = useState(null);
+  // --- BATAS STATE BARU ---
+
+  // State Filter (Lama)
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [qualificationFilter, setQualificationFilter] = useState("");
@@ -69,11 +74,7 @@ function TopRankingPage() {
     } catch (err) {
       console.error("Error fetching ranked CV data:", err);
       setError(err);
-      Notiflix.Report.failure(
-        "Load Data Failed",
-        err.response?.data?.message || err.message || "An error occurred.",
-        "Okay"
-      );
+      Notiflix.Report.failure("Load Data Failed", err.response?.data?.message || err.message, "Okay");
     } finally {
       setLoading(false);
     }
@@ -85,18 +86,18 @@ function TopRankingPage() {
 
   // (Filter Options & Handlers... tetap sama)
   const availableStatuses = useMemo(
-    () => [
-      { value: "", label: "All Status (Ranked)" },
-      { value: "REVIEWED", label: "Reviewed (AI)" },
-      { value: "STAFF_APPROVED", label: "Approved (Staff)" },
-      { value: "INTERVIEW_QUEUED", label: "In Queue (Manager)" },
-      { value: "INTERVIEW_SCHEDULED", label: "Scheduled (Manager)" },
-      { value: "PENDING_FINAL_DECISION", label: "Final Review (HR)" },
-      { value: "HIRED", label: "Hired" },
-      { value: "NOT_HIRED", label: "Not Hired" },
-    ],
-    []
-  );
+    () => [
+      { value: "", label: "All Status (Ranked)" },
+      { value: "REVIEWED", label: "Reviewed (AI)" },
+      { value: "STAFF_APPROVED", label: "Approved (Staff)" },
+      { value: "INTERVIEW_QUEUED", label: "In Queue (Manager)" },
+      { value: "INTERVIEW_SCHEDULED", label: "Scheduled (Manager)" },
+      { value: "PENDING_FINAL_DECISION", label: "Final Review (HR)" },
+      { value: "HIRED", label: "Hired" },
+      { value: "NOT_HIRED", label: "Not Hired" },
+    ],
+    []
+  );
   const availableQualifications = useMemo(() => {
     const qualifications = rankedData
       .map((item) => item.qualification)
@@ -119,6 +120,7 @@ function TopRankingPage() {
     }
   };
   const handleViewDetail = useCallback(async (cv) => {
+    // ... (Fungsi ini tidak berubah)
     if (!cv.cvFileObjectKey) {
       Notiflix.Report.warning("File Not Available", "CV file not found.", "Okay");
       return;
@@ -142,14 +144,11 @@ function TopRankingPage() {
     } catch (error) {
       Notiflix.Loading.remove();
       console.error(`Error viewing CV ID ${cv.id}:`, error);
-      Notiflix.Report.failure(
-        "Failed to Load CV",
-        error.response?.data?.message || "An error occurred.",
-        "Okay"
-      );
+      Notiflix.Report.failure("Failed to Load CV", error.response?.data?.message, "Okay");
     }
   }, []);
   const handleClosePdfModal = useCallback(() => {
+    // ... (Fungsi ini tidak berubah)
     setShowPdfModal(false);
     if (pdfUrlToView) {
       window.URL.revokeObjectURL(pdfUrlToView);
@@ -158,33 +157,22 @@ function TopRankingPage() {
     setViewingCv(null);
   }, [pdfUrlToView]);
 
-  // --- API Call Helper ---
-  const handleApiCall = useCallback(
-    async (cv, preference, newStatus = "INTERVIEW_QUEUED") => {
-      Notiflix.Loading.standard("Mengupdate Pilihan...");
+
+  // --- 3. HELPER API GENERIK (BARU) ---
+  const handleUpdateApplication = useCallback(
+    async (applicationId, payload, successMessage) => {
+      Notiflix.Loading.standard("Mengupdate...");
       try {
         const token = getAuthToken();
         if (!token) throw new Error("Missing auth token");
 
-        const payload = {
-          status: newStatus,
-          interview_notes: {
-            preference: preference, // Ini akan jadi "Online", "Offline", or null
-            scheduled_by: user?.name,
-          },
-        };
-
-        await axios.put(API_UPDATE_STATUS_URL(cv.id), payload, {
+        await axios.put(API_UPDATE_STATUS_URL(applicationId), payload, {
           headers: { Authorization: `Bearer ${token}` },
         });
 
         Notiflix.Loading.remove();
-        Notiflix.Report.success(
-          "Berhasil",
-          `Preferensi untuk ${cv.fullName} telah diupdate.`,
-          "Okay"
-        );
-        fetchRankedData(); // Refresh data untuk update kartu
+        Notiflix.Report.success("Berhasil", successMessage, "Okay");
+        fetchRankedData(); // Refresh data
       } catch (error) {
         Notiflix.Loading.remove();
         Notiflix.Report.failure(
@@ -194,56 +182,72 @@ function TopRankingPage() {
         );
       }
     },
-    [fetchRankedData, user?.name]
+    [fetchRankedData] // Tambahkan dependensi
   );
 
-  // --- Handler Tombol "Choice" ---
-  const handleSelectForInterview = useCallback(
-    (cv) => {
-      Notiflix.Confirm.show(
-        "Pilih Tipe Wawancara",
-        `Pilih tipe wawancara yang Anda minta untuk <strong>${cv.fullName}</strong>?`,
-        "Online",
-        "Offline",
-        () => {
-          handleApiCall(cv, "Online"); // Kirim "Online"
-        },
-        () => {
-          handleApiCall(cv, "Offline"); // Kirim "Offline"
-        },
-        {
-          titleColor: "#3B82F6",
-          okButtonBackground: "#10B981",
-          cancelButtonBackground: "#6B7280",
-        }
-      );
-    },
-    [handleApiCall]
-  );
+  // --- 4. ROMBAK HANDLER UNTUK MEMBUKA MODAL ---
+  const openSelectModal = (cv) => {
+    setCandidateToSelect(cv);
+    setShowSelectModal(true);
+  };
+  
+  const closeSelectModal = () => {
+    setCandidateToSelect(null);
+    setShowSelectModal(false);
+  };
 
-  // --- ✅ PERBAIKAN: HANDLER BARU UNTUK "CLEAR" ---
+  // --- 5. HANDLER BARU UNTUK SUBMIT MODAL ---
+  const handleSubmitSelection = (formData) => {
+    // formData berisi { preference, manager_notes_for_candidate }
+    
+    const payload = {
+      status: "INTERVIEW_QUEUED", // Status baru
+      interview_notes: {
+        ...(candidateToSelect.interview_notes || {}), // Pertahankan notes lama (jika ada)
+        preference: formData.preference,
+        manager_notes_for_candidate: formData.manager_notes_for_candidate,
+      }
+    };
+    
+    handleUpdateApplication(
+      candidateToSelect.id, 
+      payload, 
+      `Kandidat ${candidateToSelect.fullName} telah dipindahkan ke Antrian Wawancara.`
+    );
+    
+    closeSelectModal(); // Tutup modal setelah submit
+  };
+
+  // --- 6. HANDLER CLEAR (Undo) TETAP SAMA ---
   const handleClearInterviewChoice = useCallback(
     (cv) => {
       Notiflix.Confirm.show(
         "Bersihkan Pilihan?",
-        `Anda yakin ingin membersihkan preferensi wawancara (Online/Offline) untuk <strong>${cv.fullName}</strong>? Status akan kembali ke 'REVIEWED'.`,
+        `Anda yakin ingin membersihkan preferensi wawancara untuk <strong>${cv.fullName}</strong>? Status akan kembali ke 'STAFF_APPROVED'.`,
         "Ya, Bersihkan",
         "Batal",
         () => {
-          // Kirim 'null' untuk membersihkan preferensi
-          // Kirim 'REVIEWED' untuk mengembalikan status
-          handleApiCall(cv, null, "STAFF_APPROVED"); 
+          handleUpdateApplication(
+            cv.id, 
+            { 
+              status: "STAFF_APPROVED", // Kembalikan ke status saringan HR
+              interview_notes: {
+                ...(cv.interview_notes || {}),
+                preference: null, // Hapus preferensi
+                manager_notes_for_candidate: null // Hapus catatan
+              }
+            },
+            "Pilihan telah dibersihkan."
+          );
         },
-        () => {}, // Batal
-        {
-          titleColor: "#EF4444", // Merah
-          okButtonBackground: "#EF4444",
-        }
+        () => {},
+        { titleColor: "#EF4444", okButtonBackground: "#EF4444" }
       );
     },
-    [handleApiCall]
+    [handleUpdateApplication] // Dependensi ke helper API baru
   );
-  // --- BATAS PERBAIKAN ---
+  // --- BATAS PERBAIKAN HANDLER ---
+
 
   // --- Render ---
   return (
@@ -257,8 +261,8 @@ function TopRankingPage() {
 
       {/* --- Filter Bar (Tidak ada perubahan) --- */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4 p-3 rounded">
-        {/* ... (kode filter tidak berubah) ... */}
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {/* (Input Search) */}
           <input
             type="text"
             placeholder="Search..."
@@ -266,6 +270,7 @@ function TopRankingPage() {
             onChange={handleSearchChange}
             className="shadow-sm border border-gray-300 rounded py-2 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 flex-grow md:flex-grow-0 md:w-48"
           />
+          {/* (Dropdown Status) */}
           <div className="relative w-full sm:w-auto">
             <select
               value={statusFilter}
@@ -280,6 +285,7 @@ function TopRankingPage() {
             </select>{" "}
             <ChevronDownIcon className="h-4 w-4 pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500" />
           </div>
+          {/* (Dropdown Kualifikasi) */}
           <div className="relative w-full sm:w-auto">
             <select
               value={qualificationFilter}
@@ -294,6 +300,7 @@ function TopRankingPage() {
             </select>{" "}
             <ChevronDownIcon className="h-4 w-4 pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500" />
           </div>
+          {/* (DatePicker) */}
           <div className="relative w-full sm:w-auto min-w-[150px]">
             <DatePicker
               selected={dateFilter}
@@ -307,6 +314,7 @@ function TopRankingPage() {
               <CalendarDaysIcon className="h-5 w-5 text-gray-400 absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none" />
             )}
           </div>
+          {/* (Input Limit) */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <label
               htmlFor="limit-select"
@@ -326,6 +334,7 @@ function TopRankingPage() {
             </select>
           </div>
         </div>
+        {/* (Tombol Aksi Kanan) */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={fetchRankedData}
@@ -361,7 +370,7 @@ function TopRankingPage() {
         </div>
       )}
 
-      {/* --- ✅ PERBAIKAN: KIRIM PROP BARU KE KARTU --- */}
+      {/* --- 7. KIRIM HANDLER BARU KE KARTU --- */}
       {!loading && !error && rankedData.length > 0 && (
         <div className="flex flex-col gap-6">
           {rankedData.map((cv, index) => (
@@ -370,14 +379,17 @@ function TopRankingPage() {
               cv={cv}
               rank={index + 1}
               onViewDetail={handleViewDetail}
+              // --- Props Baru ---
               userRole={user?.role}
-              onSelectForInterview={handleSelectForInterview}
-              // --- Prop Baru ---
+              onSelectForInterview={openSelectModal} // <-- Ganti ke pembuka modal
               onClearInterviewChoice={handleClearInterviewChoice}
+              // --- Batas Props Baru ---
             />
           ))}
         </div>
       )}
+      {/* --- BATAS PERUBAIKAN --- */}
+
 
       {/* (Modal PDF Viewer... tetap sama) */}
       <PdfViewerModal
@@ -386,6 +398,15 @@ function TopRankingPage() {
         pdfUrl={pdfUrlToView}
         viewingCv={viewingCv}
       />
+      
+      {/* --- 8. RENDER MODAL BARU DI SINI --- */}
+      <ManagerSelectModal
+        isOpen={showSelectModal}
+        onClose={closeSelectModal}
+        onSubmit={handleSubmitSelection}
+        candidate={candidateToSelect}
+      />
+      
     </div>
   );
 }

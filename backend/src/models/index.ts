@@ -6,6 +6,7 @@ import { sequelize, initializeDatabase as connectToDB } from "../config/database
 import User from "./user.model";
 import JobPosition from "./jobPosition.model";
 import CvApplication from "./cvApplication.model";
+import Schedule from "./schedule.model"; // <-- 1. TAMBAHKAN INI
 
 // Buat objek db untuk menampung model
 const db = {
@@ -14,6 +15,7 @@ const db = {
   User,
   JobPosition,
   CvApplication,
+  Schedule, // <-- 2. TAMBAHKAN INI
 };
 
 // --- Inisialisasi Asosiasi (Relasi) ---
@@ -39,18 +41,11 @@ JobPosition.belongsTo(User, {
 
 console.log("Database models associations established.");
 
-/**
- * Fungsi inisialisasi utama untuk database.
- * HANYA menghubungkan dan mengautentikasi.
- * TIDAK melakukan 'sync' (karena kita pakai 'db:migrate')
- */
 const initializeDatabase = async () => {
   try {
-    // 1. Hubungkan (dari database.ts)
+
     await connectToDB(); 
     
-    // 2. HAPUS 'sequelize.sync'
-    // await sequelize.sync({ alter: true }); // <-- DIHAPUS, KARENA KITA PAKAI MIGRASI
     
     console.log("Database connection authenticated successfully.");
   } catch (error) {
@@ -66,6 +61,7 @@ export {
   User,
   JobPosition,
   CvApplication,
+  Schedule, // <-- 3. TAMBAHKAN INI
 };
 
 export default db;

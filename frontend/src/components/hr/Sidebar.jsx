@@ -8,7 +8,7 @@ import Notiflix from "notiflix";
 import {
   House, FileText, Star, Archive, Users, Briefcase,
   Gear, SignOut, CaretLeft, CaretRight, ArrowLineLeft,
-  ClipboardText, CheckSquare, CalendarCheck 
+  ClipboardText, CheckSquare, CalendarCheck, Calendar
 } from "@phosphor-icons/react";
 
 import logoWhite from "../../images/logo-white.png";
@@ -118,6 +118,14 @@ const mainMenuItems = [
       gradient: "from-[#1e3b5c] to-[#2c5f8d]",
       hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
       allowedRoles: ["head_hr", "staff_hr", "manager"]
+    },
+        { 
+      path: "/hr/event-calendar", // <-- Path yang kita daftarkan di App.jsx
+      label: "Event Calendar", 
+      icon: Calendar, // <-- Icon baru
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr"] // (Kita set untuk HR saja)
     },
     { 
       path: "/hr/archived", 
