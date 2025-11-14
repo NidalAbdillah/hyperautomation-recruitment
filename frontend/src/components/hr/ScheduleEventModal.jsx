@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom";
 import { XMarkIcon, TrashIcon } from "@heroicons/react/24/outline";
-import moment from "moment"; // Butuh moment untuk format datetime-local
+import moment from "moment";
 
 function ScheduleEventModal({
   isOpen,
@@ -18,10 +18,10 @@ function ScheduleEventModal({
   const [end, setEnd] = useState("");
   const [description, setDescription] = useState("");
 
-  // Helper untuk format tanggal ke 'datetime-local'
+  // Helper untuk format tanggal ke 'datetime-local' (24 jam, format Indonesia)
   const formatForInput = (date) => {
     if (!date) return "";
-    // Format: YYYY-MM-DDTHH:mm
+    // Format: YYYY-MM-DDTHH:mm (24 jam)
     return moment(date).format("YYYY-MM-DDTHH:mm");
   };
 
@@ -32,9 +32,17 @@ function ScheduleEventModal({
         // Mode Buat: Ambil dari klik kalender
         setTitle("");
         setStart(formatForInput(initialData.start));
-        // Atur end time default, misal 1 jam setelah start
-        const defaultEndDate = moment(initialData.start).add(1, 'hour').toDate();
-        setEnd(formatForInput(defaultEndDate));
+        
+        // 🔥 FIX: Gunakan end time dari drag, atau default 1 jam kalau tidak ada
+        if (initialData.end) {
+          // Kalau ada end time (dari drag), GUNAKAN ITU
+          setEnd(formatForInput(initialData.end));
+        } else {
+          // Kalau tidak ada (dari klik), default 1 jam
+          const defaultEndDate = moment(initialData.start).add(1, 'hour').toDate();
+          setEnd(formatForInput(defaultEndDate));
+        }
+        
         setDescription("");
       } else if (mode === "edit") {
         // Mode Edit: Ambil dari data event
@@ -112,7 +120,7 @@ function ScheduleEventModal({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 required
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -127,7 +135,7 @@ function ScheduleEventModal({
                 value={start}
                 onChange={(e) => setStart(e.target.value)}
                 required
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -142,7 +150,7 @@ function ScheduleEventModal({
                 value={end}
                 onChange={(e) => setEnd(e.target.value)}
                 required
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
@@ -156,7 +164,7 @@ function ScheduleEventModal({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={4}
-                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm"
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>

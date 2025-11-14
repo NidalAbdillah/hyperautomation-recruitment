@@ -18,6 +18,9 @@ function ScheduleCalendar({ events, onEventClick, onDateSelect, onEventDrop }) {
   // Handler untuk drag-select (klik dan geser)
   const handleDragSelect = (selectionInfo) => {
     console.log("🟢 Drag-select triggered:", selectionInfo);
+    console.log("   Start:", selectionInfo.start);
+    console.log("   End:", selectionInfo.end);
+    console.log("   AllDay:", selectionInfo.allDay);
     
     // 🚨 FILTER 1: Abaikan kalau ini klik biasa (bukan drag)
     const isDrag = selectionInfo.start.getTime() !== selectionInfo.end.getTime();
@@ -35,6 +38,8 @@ function ScheduleCalendar({ events, onEventClick, onDateSelect, onEventDrop }) {
     // ✅ Kalau sampai sini, berarti drag yang valid
     if (onDateSelect) {
       console.log("✅ Valid drag detected, calling onDateSelect...");
+      console.log("   Sending start:", selectionInfo.start);
+      console.log("   Sending end:", selectionInfo.end);
       onDateSelect(selectionInfo);
     } else {
       console.warn("❌ onDateSelect prop is undefined!");
