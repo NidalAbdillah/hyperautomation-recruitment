@@ -17,6 +17,7 @@ import {
   viewCvFile,
   updateApplicationStatus,
   handleN8nResult,
+  triggerSchedule,
 } from "../controllers/applications.controller";
 
 // Konfigurasi Multer
@@ -58,6 +59,7 @@ adminRouter.get("/:id/download-cv", downloadCvFile);
 adminRouter.get("/:id/view-cv", viewCvFile);
 adminRouter.put("/:id/status", updateApplicationStatus);
 adminRouter.post("/:id/process-result", handleN8nResult);
+adminRouter.post("/:id/trigger-schedule", triggerSchedule);
 
 // Export kedua router
 export {

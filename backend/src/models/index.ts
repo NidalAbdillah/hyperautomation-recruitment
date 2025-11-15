@@ -39,6 +39,17 @@ JobPosition.belongsTo(User, {
   as: 'requestor'
 });
 
+CvApplication.hasOne(Schedule, {
+  foreignKey: "applicationId",
+  as: "schedule", // CvApplication.getSchedule()
+});
+
+// Satu Jadwal milik SATU Kandidat (Aplikasi)
+Schedule.belongsTo(CvApplication, {
+  foreignKey: "applicationId",
+  as: "application", // Schedule.getApplication()
+});
+
 console.log("Database models associations established.");
 
 const initializeDatabase = async () => {

@@ -50,6 +50,7 @@ class UserService implements IUserService {
       name: userJson.name,
       email: userJson.email,
       role: userJson.role,
+      department: userJson.department,
       createdAt: userJson.createdAt,
       updatedAt: userJson.updatedAt,
       photoUrl: photoUrl,

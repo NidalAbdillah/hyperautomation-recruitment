@@ -308,6 +308,40 @@ const bulkDownloadController = async (req: Request, res: Response) => {
     }
 };
 
+const triggerSchedule = async (req: Request, res: Response) => {
+  try {
+    const applicationId = parseInt(req.params.id, 10);
+    const scheduleData = req.body; // Ini berisi { dateTime, endTime, notes_from_hr }
+    const hrUser = req.user; // Diambil dari middleware authenticate
+
+    if (isNaN(applicationId)) {
+      const err: any = new Error("Invalid application ID."); err.status = 400; throw err;
+    }
+    // Validasi data yang dikirim dari frontend
+    if (!scheduleData.dateTime || !scheduleData.endTime) {
+      const err: any = new Error("dateTime and endTime are required in body."); err.status = 400; throw err;
+    }
+    if (!hrUser) {
+      const err: any = new Error("HR User not authenticated."); err.status = 401; throw err;
+    }
+
+    // Panggil service yang baru kita buat
+    const updatedApplication = await applicationService.triggerScheduleWorkflow(
+      applicationId,
+      scheduleData,
+      hrUser
+    );
+
+    res.status(200).json({
+      message: "Schedule workflow triggered and application updated.",
+      application: updatedApplication,
+    });
+
+  } catch (error: any) {
+    handleErrorResponse(res, error);
+  }
+};
+
 const getRankedApplicationsController = async (req: Request, res: Response) => {
   console.log("Controller: Request for ranked applications received.");
   try {
@@ -341,4 +375,5 @@ export {
   bulkDeleteActiveController,
   bulkDownloadController,
   getRankedApplicationsController,
+  triggerSchedule,
 };

@@ -102,6 +102,7 @@ function InterviewScheduleTable({
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Posisi</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detail (dari Manajer)</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lokasi / Link</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
             </tr>
           </thead>
@@ -141,6 +142,51 @@ function InterviewScheduleTable({
                         </span>
                       </div>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
+                    {(() => {
+                      // 1. Ambil data dari 'interview_notes' (yang sudah di-update N8N)
+                      const notes = cv.interview_notes;
+                      const preference = notes?.preference; // "Online" atau "Offline"
+                      const link = notes?.schedule_link;     // https://meet.google.com/...
+                      
+                      // 2. Terapkan logika Anda
+                      if (cv.status === 'INTERVIEW_QUEUED') {
+                        return (
+                          <span className="text-xs italic text-gray-500">
+                            Menunggu Jadwal dari HR...
+                          </span>
+                        );
+                      }
+                      
+                      if (preference === 'Offline') {
+                        return (
+                          <span className="font-medium text-gray-800">
+                            Offline (Kantor PT. Tech XYZ)
+                          </span>
+                        );
+                      }
+                      
+                      if (preference === 'Online' && link) {
+                        return (
+                          <a 
+                            href={link} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          >
+                            Google Meet Link
+                          </a>
+                        );
+                      }
+
+                      // Fallback jika online tapi link belum ada (seharusnya tidak terjadi)
+                      return (
+                          <span className="text-xs italic text-gray-500">
+                            Online (Menunggu Link...)
+                          </span>
+                        );
+                    })()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     {renderActionButtons(cv)}

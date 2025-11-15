@@ -1,5 +1,5 @@
 // src/services/application.service.ts
-import { CvApplication, JobPosition } from "../models";
+import { CvApplication, JobPosition, User } from "../models";
 import minioService from "./minio.service";
 import { sequelize } from "../config/database";
 import { Op, Transaction } from "sequelize";
@@ -54,135 +54,209 @@ class ApplicationService implements IApplicationService {
 
 // src/services/application.service.ts
 
-  public async createApplication(
-    applicationData: ApplicationCreationDTO,
-    cvFile: Express.Multer.File
-  ): Promise<CvApplication> {
-    if (!cvFile) throw createError("CV file is required.", 400);
+  public async triggerScheduleWorkflow(
+    applicationId: number,
+    scheduleData: any, // Data dari frontend (dateTime, endTime, notes_from_hr)
+    hrUser: any // Data user HR yang sedang login (dari req.user)
+  ): Promise<CvApplication> {
+    
+    // 1. Dapatkan URL Webhook dari .env
+    const n8nWebhookUrl = process.env.N8N_SCHEDULE_WEBHOOK_URL;
+    if (!n8nWebhookUrl) {
+      console.error("[Service] N8N_SCHEDULE_WEBHOOK_URL not configured.");
+      throw createError("Schedule service is not configured.", 500);
+    }
+
+    // 2. Ambil semua data aplikasi (termasuk Manajer yang me-request)
+    const application = await CvApplication.findByPk(applicationId, {
+      include: [
+        {
+          model: JobPosition,
+          as: "appliedPosition", // Sesuai dengan relasi di models/index.ts
+          include: [{ model: User, as: "requestor" }], // Ambil data Manajer
+        },
+      ],
+    });
+
+    if (!application) {
+      throw createError("Application not found.", 404);
+    }
+
+    // 3. Siapkan payload lengkap untuk dikirim ke N8N
+    const payload = {
+      applicationId: application.id,
+      candidateName: application.fullName,
+      candidateEmail: application.email,
+      
+      // --- KOREKSI ERROR 1 DI SINI ---
+      // Kita gunakan (application as any) untuk mengakses relasi 'appliedPosition'
+      managerName: (application as any).appliedPosition?.requestor?.name || "Manager",
+      managerEmail: (application as any).appliedPosition?.requestor?.email || null,
+      
+      // --- KOREKSI ERROR 2 DI SINI ---
+      // Kita gunakan (application.interview_notes as any) untuk mengakses 'preference'
+      preference: (application.interview_notes as any)?.preference || "Online",
+      // --- BATAS KOREKSI ---
+
+      dateTime: scheduleData.dateTime,
+      endTime: scheduleData.endTime,
+      notes_from_hr: scheduleData.notes_from_hr,
+      userName: hrUser.email, // Nama Staff HR yang menjadwalkan
+    };
+    
+    // 4. Panggil N8N (Fire-and-Forget, tidak perlu ditunggu)
+    axios.post(n8nWebhookUrl, payload)
+      .then(() => console.log(`[N8N] Schedule webhook triggered for app ID: ${applicationId}`))
+      .catch((err) => console.error(`[N8N] CRITICAL: Failed to trigger schedule webhook for ID ${applicationId}:`, err.message));
+      
+    // 5. Langsung update database (agar frontend responsif)
+    application.status = "INTERVIEW_SCHEDULED";
+    application.interview_notes = {
+      ...(application.interview_notes as any || {}), // <-- Tambahkan (as any) di sini juga
+      scheduled_time: scheduleData.dateTime,
+      scheduled_end_time: scheduleData.endTime,
+      scheduled_by: hrUser.email,
+      manager_notes_for_candidate: scheduleData.notes_from_hr,
+    };
+
+    // Simpan perubahan ke database
+    await application.save({
+      fields: ["status", "interview_notes"],
+    });
+    
+    console.log(`[Service] Application ${applicationId} status updated to INTERVIEW_SCHEDULED.`);
+    return application;
+  }
+
+  public async createApplication(
+    applicationData: ApplicationCreationDTO,
+    cvFile: Express.Multer.File
+  ): Promise<CvApplication> {
+    if (!cvFile) throw createError("CV file is required.", 400);
 
     // --- PERBAIKAN 1: Cari lowongan SEBELUM transaksi ---
-    const positionId = parseInt(applicationData.appliedPositionId, 10);
-    if (isNaN(positionId)) {
-        throw createError("Valid Applied position ID is required.", 400);
-    }
+    const positionId = parseInt(applicationData.appliedPositionId, 10);
+    if (isNaN(positionId)) {
+        throw createError("Valid Applied position ID is required.", 400);
+    }
     // Cari di luar transaksi dan gunakan status "OPEN" (UPPERCASE)
-    const position = await JobPosition.findOne({
-        where: { id: positionId, status: "OPEN" },
-    });
-    if (!position) {
-      // Error 404 dilempar sebelum transaksi dimulai
-      throw createError(`Position not found or not open.`, 404);
-    }
+    const position = await JobPosition.findOne({
+        where: { id: positionId, status: "OPEN" },
+    });
+    if (!position) {
+      // Error 404 dilempar sebelum transaksi dimulai
+      throw createError(`Position not found or not open.`, 404);
+    }
     // --- BATAS PERBAIKAN 1 ---
 
-    const t: Transaction = await sequelize.transaction(); // Transaksi baru dimulai di sini
-    let uploadedMinioObjectName: string | null = null;
+    const t: Transaction = await sequelize.transaction(); // Transaksi baru dimulai di sini
+    let uploadedMinioObjectName: string | null = null;
 
-    try {
+    try {
         // --- PERBAIKAN 2: HAPUS pencarian lowongan yang duplikat dari sini ---
         // (const positionId = ... Dihapus)
         // (const position = ... Dihapus)
 
-      const existingApplication = await CvApplication.findOne({
-        where: {
-          email: applicationData.email,
-          appliedPositionId: position.id, // <-- Gunakan 'position' dari luar
-          isArchived: false,
-        },
-        transaction: t,
-      });
-      if (existingApplication) {
-        throw createError(
-          `Email ${applicationData.email} has already applied for this position.`,
-          409
-        );
-      }
-      const uploadedFileInfo = await minioService.uploadCvFile(cvFile);
-      uploadedMinioObjectName = uploadedFileInfo.objectName; // (Sudah benar)
+      const existingApplication = await CvApplication.findOne({
+        where: {
+          email: applicationData.email,
+          appliedPositionId: position.id, // <-- Gunakan 'position' dari luar
+          isArchived: false,
+        },
+        transaction: t,
+      });
+      if (existingApplication) {
+        throw createError(
+          `Email ${applicationData.email} has already applied for this position.`,
+          409
+        );
+      }
+      const uploadedFileInfo = await minioService.uploadCvFile(cvFile);
+      uploadedMinioObjectName = uploadedFileInfo.objectName; // (Sudah benar)
 
-      const dataToSave = {
-        fullName: applicationData.fullName,
-        email: applicationData.email,
-        qualification: position.name, // <-- Gunakan 'position' dari luar
-        agreeTerms: applicationData.agreeTerms,
-        cvFileName: uploadedFileInfo.fileName,
-        cvFileObjectKey: uploadedFileInfo.objectName,
-        status: "SUBMITTED", // (Sudah benar)
-        appliedPositionId: position.id, // <-- Gunakan 'position' dari luar
-        interview_notes: null,
-      };
-      
-      const newApplication = await CvApplication.create(dataToSave as any, {
-        transaction: t,
-      });
-      await t.commit();
-      console.log(
-        `[createApplication] SUCCESS! DB Commit OK. Application ID=${newApplication.id}`
-      );
+      const dataToSave = {
+        fullName: applicationData.fullName,
+        email: applicationData.email,
+        qualification: position.name, // <-- Gunakan 'position' dari luar
+        agreeTerms: applicationData.agreeTerms,
+        cvFileName: uploadedFileInfo.fileName,
+        cvFileObjectKey: uploadedFileInfo.objectName,
+        status: "SUBMITTED", // (Sudah benar)
+        appliedPositionId: position.id, // <-- Gunakan 'position' dari luar
+        interview_notes: null,
+      };
+      
+      const newApplication = await CvApplication.create(dataToSave as any, {
+        transaction: t,
+      });
+      await t.commit();
+      console.log(
+        `[createApplication] SUCCESS! DB Commit OK. Application ID=${newApplication.id}`
+      );
 
-      // (Email confirmation ... sisa kode Anda sudah benar)
-      emailService
-        .sendApplicationConfirmation(
-          newApplication.email,
-          newApplication.fullName,
-          newApplication.qualification
-        )
-        .catch((emailError: any) => {
-          console.error(
-            `[Email Confirmation] FAILED to send:`,
-            emailError.message
-          );
-        });
+      // (Email confirmation ... sisa kode Anda sudah benar)
+      emailService
+        .sendApplicationConfirmation(
+          newApplication.email,
+          newApplication.fullName,
+          newApplication.qualification
+        )
+        .catch((emailError: any) => {
+          console.error(
+            `[Email Confirmation] FAILED to send:`,
+            emailError.message
+          );
+        });
 
-      // (N8N Webhook trigger ... sisa kode Anda sudah benar)
-      const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
-      if (n8nWebhookUrl) {
-        axios
-          .post(n8nWebhookUrl, {
-            applicationId: newApplication.id,
-            cvFileObjectKey: uploadedFileInfo.objectName,
-          })
-          .then(() => {
-            console.log(
-              `[N8N] Webhook triggered for application ID: ${newApplication.id}`
-            );
-          })
-          .catch((n8nError: any) => {
-            console.error(
-              `[N8N] CRITICAL: Failed to trigger webhook for ID ${newApplication.id}:`,
-              n8nError.message
-            );
-          });
-      } else {
-        console.warn("[N8N] Webhook URL not configured, skipping trigger.");
-      }
-      return newApplication;
+      // (N8N Webhook trigger ... sisa kode Anda sudah benar)
+      const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
+      if (n8nWebhookUrl) {
+        axios
+          .post(n8nWebhookUrl, {
+            applicationId: newApplication.id,
+            cvFileObjectKey: uploadedFileInfo.objectName,
+          })
+          .then(() => {
+            console.log(
+              `[N8N] Webhook triggered for application ID: ${newApplication.id}`
+            );
+          })
+          .catch((n8nError: any) => {
+            console.error(
+              `[N8N] CRITICAL: Failed to trigger webhook for ID ${newApplication.id}:`,
+              n8nError.message
+            );
+          });
+      } else {
+        console.warn("[N8N] Webhook URL not configured, skipping trigger.");
+      }
+      return newApplication;
 
-    } catch (error: any) {
-      // (Catch block ... sisa kode Anda sudah benar)
-      if (t && !(t as any).finished) {
-        try {
-          await t.rollback();
-          console.log(`[createApplication] Transaction rolled back due to error.`);
-        } catch (rollbackError: any) {
-          console.error("[createApplication] Error during rollback:", rollbackError);
-        }
-      }
-      console.error("[createApplication] ERROR during creation process:", error.message);
-      if (uploadedMinioObjectName) {
-        try {
-          await minioService.deleteCvFile(uploadedMinioObjectName); 
-        } catch (cleanupError: any) {
-          console.error(
-            "[createApplication] Failed to cleanup MinIO file:",
-            cleanupError.message
-          );
-        }
-      }
-      if (!error.status) error.status = 500;
-      throw error;
-    }
-  }
+    } catch (error: any) {
+      // (Catch block ... sisa kode Anda sudah benar)
+      if (t && !(t as any).finished) {
+        try {
+          await t.rollback();
+          console.log(`[createApplication] Transaction rolled back due to error.`);
+        } catch (rollbackError: any) {
+          console.error("[createApplication] Error during rollback:", rollbackError);
+        }
+      }
+      console.error("[createApplication] ERROR during creation process:", error.message);
+      if (uploadedMinioObjectName) {
+        try {
+          await minioService.deleteCvFile(uploadedMinioObjectName); 
+        } catch (cleanupError: any) {
+          console.error(
+            "[createApplication] Failed to cleanup MinIO file:",
+            cleanupError.message
+          );
+        }
+      }
+      if (!error.status) error.status = 500;
+      throw error;
+    }
+  }
 
   public async getAllApplications(): Promise<CvApplication[]> {
     try {

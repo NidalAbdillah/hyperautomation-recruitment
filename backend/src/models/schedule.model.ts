@@ -9,16 +9,18 @@ interface ScheduleAttributes {
   startDate: Date;
   endDate: Date;
   description: string | null;
+  // --- ✅ PR: TAMBAHKAN FOREIGN KEY ---
+  applicationId: number | null; 
+  // --- BATAS PR ---
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
 
 // Interface untuk data yang dibutuhkan saat membuat Schedule baru
-// 'id', 'createdAt', 'updatedAt' dibuat opsional
 interface ScheduleCreationAttributes
   extends Optional<
     ScheduleAttributes,
-    "id" | "description" | "createdAt" | "updatedAt"
+    "id" | "description" | "createdAt" | "updatedAt" | "applicationId" // <-- ✅ PR: Tambahkan "applicationId"
   > {}
 
 // Definisikan Model
@@ -31,6 +33,9 @@ class Schedule
   public startDate!: Date;
   public endDate!: Date;
   public description!: string | null;
+  // --- ✅ PR: TAMBAHKAN FOREIGN KEY ---
+  public applicationId!: number | null;
+  // --- BATAS PR ---
 
   // Timestamps
   public readonly createdAt!: Date;
@@ -66,8 +71,20 @@ Schedule.init(
       allowNull: true,
       comment: "Deskripsi atau detail event",
     },
-    // createdAt dan updatedAt akan otomatis ditangani oleh Sequelize
-    // karena 'timestamps: true' di bawah
+
+    // --- ✅ PR: TAMBAHKAN DEFINISI KOLOM (Sesuai Migrasi Anda) ---
+    applicationId: {
+      type: DataTypes.INTEGER,
+      allowNull: true, // Boleh null (untuk event manual HR)
+      references: {
+        model: "cv_applications", // Nama tabel aplikasi
+        key: "id",
+      },
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL", 
+      comment: "ID dari aplikasi CV jika event ini adalah wawancara",
+    },
+    // --- BATAS PR ---
   },
   {
     sequelize, // Koneksi sequelize

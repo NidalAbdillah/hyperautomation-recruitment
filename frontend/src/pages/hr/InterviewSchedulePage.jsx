@@ -1,4 +1,3 @@
-// src/pages/hr/InterviewSchedulePage.jsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import axios from 'axios';
@@ -9,13 +8,15 @@ import InterviewFeedbackModal from '../../components/hr/InterviewFeedbackModal';
 
 import { UserGroupIcon, CheckBadgeIcon } from '@heroicons/react/24/outline';
 
-// --- (API Endpoints & Konstanta tetap sama) ---
+// --- (API Endpoints) ---
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-const API_GET_APPLICATIONS_URL = `${API_BASE_URL}/api/hr/applications`; 
+const API_GET_APPLICATIONS_URL = `${API_BASE_URL}/api/hr/applications`;
+const API_GET_SCHEDULES_URL = `${API_BASE_URL}/api/hr/schedules`; 
 const API_UPDATE_STATUS_URL = (id) => `${API_BASE_URL}/api/hr/applications/${id}/status`;
-const API_TRIGGER_SCHEDULE_URL = (id) => `${API_BASE_URL}/api/hr/applications/${id}/trigger-schedule`; // (Endpoint N8N)
+const API_TRIGGER_SCHEDULE_URL = (id) => `${API_BASE_URL}/api/hr/applications/${id}/trigger-schedule`; 
 const getAuthToken = () => localStorage.getItem("token");
 
+// (Map Status... tidak berubah)
 export const STATUS_DISPLAY_MAP = {
   "SUBMITTED":    { label: "Submitted", color: "bg-gray-100 text-gray-800" },
   "REVIEWED":     { label: "Reviewed (AI)", color: "bg-blue-100 text-blue-800" },
@@ -33,8 +34,9 @@ const defaultStatusDisplay = STATUS_DISPLAY_MAP["default"];
 
 function InterviewSchedulePage() {
   const { user } = useAuth();
-  // 'allApplications' adalah "Kalender Kebenaran" kita
   const [allApplications, setAllApplications] = useState([]); 
+  const [allSchedules, setAllSchedules] = useState([]); // Ganti nama: manualEvents → allSchedules
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('manager');
@@ -43,19 +45,26 @@ function InterviewSchedulePage() {
   const [showFinalModal, setShowFinalModal] = useState(false);
   const [selectedCandidate, setSelectedCandidate] = useState(null);
 
-  // (fetchAllApplications, useMemo, handleUpdateApplication... tetap sama)
-  const fetchAllApplications = useCallback(async () => {
+  // --- ✅ FETCH DATA (Tidak Berubah, Sudah Benar) ---
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const token = getAuthToken();
       if (!token) throw new Error("Missing auth token");
-      const response = await axios.get(API_GET_APPLICATIONS_URL, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setAllApplications(Array.isArray(response.data) ? response.data : []);
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Ambil kedua data secara paralel
+      const [appResponse, scheduleResponse] = await Promise.all([
+        axios.get(API_GET_APPLICATIONS_URL, { headers }),
+        axios.get(API_GET_SCHEDULES_URL, { headers })
+      ]);
+
+      setAllApplications(Array.isArray(appResponse.data) ? appResponse.data : []);
+      setAllSchedules(Array.isArray(scheduleResponse.data) ? scheduleResponse.data : []); // Update state
+      
     } catch (err) {
-      console.error("Error fetching interview data:", err);
+      console.error("Error fetching all calendar data:", err);
       setError(err.message || "Gagal memuat data");
       Notiflix.Report.failure("Load Data Gagal", err.response?.data?.message || err.message, "Okay");
     } finally {
@@ -64,9 +73,10 @@ function InterviewSchedulePage() {
   }, []);
 
   useEffect(() => {
-    fetchAllApplications();
-  }, [fetchAllApplications]);
+    fetchAllData();
+  }, [fetchAllData]);
 
+  // --- ✅ MEMO UNTUK TABEL (Tidak Berubah) ---
   const { managerQueue, finalQueue } = useMemo(() => {
     const managerQueue = allApplications.filter(app => 
       ["INTERVIEW_QUEUED", "INTERVIEW_SCHEDULED"].includes(app.status)
@@ -76,11 +86,38 @@ function InterviewSchedulePage() {
     );
     return { managerQueue, finalQueue };
   }, [allApplications]);
+  
+  // --- 🔥 ROMBAKAN UTAMA: KALENDER SEKARANG 100% DARI "schedules" ---
+  const masterCalendarEvents = useMemo(() => {
+    // HANYA ambil dari "schedules" (Single Source of Truth)
+    // Format untuk FullCalendar
+    return allSchedules.map(event => {
+      // Deteksi tipe event berdasarkan title atau description
+      const isInterviewEvent = event.title.toLowerCase().includes('interview');
+      
+      return {
+        id: event.id, // Gunakan ID asli dari database
+        title: event.title, // Misal: "Interview: Nidal" atau "Libur Nasional"
+        start: event.startDate, // String ISO atau Date object
+        end: event.endDate,
+        description: event.description || '',
+        allDay: false,
+        backgroundColor: isInterviewEvent ? '#6B7280' : '#DC2626', // Abu-abu untuk interview, Merah untuk libur
+        borderColor: isInterviewEvent ? '#6B7280' : '#DC2626',
+        overlap: false, // Cegah tumpang tindih
+        extendedProps: {
+          type: isInterviewEvent ? 'interview' : 'manual',
+          source: 'schedules' // Penanda: semua dari "schedules"
+        }
+      };
+    });
 
+  }, [allSchedules]); // Hanya bergantung pada allSchedules
+
+  // --- ✅ UPDATE APPLICATION (Tidak Berubah) ---
   const handleUpdateApplication = useCallback(async (applicationId, payload, successMessage) => {
-    // ... (fungsi ini sudah benar, tidak perlu diubah)
     Notiflix.Loading.standard("Updating status...");
-     try {
+    try {
       const token = getAuthToken();
       if (!token) throw new Error("Missing auth token");
       await axios.put(
@@ -90,15 +127,15 @@ function InterviewSchedulePage() {
       );
       Notiflix.Loading.remove();
       Notiflix.Report.success("Berhasil", successMessage, "Okay");
-      fetchAllApplications();
+      fetchAllData();
     } catch (error) {
       Notiflix.Loading.remove();
       console.error("Error updating application status:", error);
       Notiflix.Report.failure("Update Gagal", error.response?.data?.message, "Okay");
     }
-  }, [fetchAllApplications]); // <-- tambahkan fetchAllApplications
+  }, [fetchAllData]);
   
-  // --- Handler untuk memicu Otomatisasi N8N ---
+  // --- ✅ TRIGGER SCHEDULE (Tidak Berubah, Sudah Benar) ---
   const handleTriggerSchedule = useCallback(async (applicationId, scheduleData, interviewType) => {
     Notiflix.Loading.standard("Memicu otomatisasi penjadwalan...");
     try {
@@ -107,47 +144,27 @@ function InterviewSchedulePage() {
       
       const payload = { ...scheduleData, type: interviewType };
 
-      // --- PANGGIL ENDPOINT BARU DI BACKEND ---
-      // (Saat ini kita simulasi, tapi nanti ganti ke endpoint trigger n8n)
-      // await axios.post(
-      //   API_TRIGGER_SCHEDULE_URL(applicationId),
-      //   payload, 
-      //   { headers: { Authorization: `Bearer ${token}` } }
-      // );
-      
-      // --- SIMULASI (Hapus ini nanti) ---
-      const newStatus = (interviewType === 'manager') ? 'INTERVIEW_SCHEDULED' : 'ONBOARDING'; // (Contoh)
-      await handleUpdateApplication(
-        applicationId,
-        { 
-          status: newStatus, 
-          interview_notes: {
-            ...(selectedCandidate.interview_notes || {}),
-            scheduled_time: scheduleData.dateTime,
-            scheduled_end_time: scheduleData.endTime, // (Sudah benar dari sebelumnya)
-            scheduled_by: user.name,
-            // --- ✅ PERBAIKAN LOGIKA PENYIMPANAN ---
-            // 'notes_from_hr' adalah versi final (mungkin sudah diedit HR)
-            // Kita timpa 'manager_notes_for_candidate' dengan versi baru ini.
-            manager_notes_for_candidate: scheduleData.notes_from_hr
-          }
-        },
-        `Simulasi Penjadwalan Berhasil! (Status diubah ke ${newStatus})`
+      // Panggil backend yang akan trigger N8N
+      await axios.post(
+        API_TRIGGER_SCHEDULE_URL(applicationId),
+        payload, 
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      // --- BATAS SIMULASI ---
-
-      // Notiflix.Loading.remove(); // (Sudah dipanggil oleh handleUpdateApplication)
-      // Notiflix.Report.success("Berhasil", "Otomatisasi penjadwalan berhasil dipicu!", "Okay");
-      // fetchAllApplications(); // (Sudah dipanggil oleh handleUpdateApplication)
+      
+      Notiflix.Loading.remove();
+      Notiflix.Report.success("Berhasil", "Otomatisasi penjadwalan berhasil dipicu! Email akan dikirim ke kandidat.", "Okay");
+      
+      // Refresh data (termasuk kalender dari schedules)
+      fetchAllData(); 
 
     } catch (error) {
       Notiflix.Loading.remove();
       console.error("Error triggering schedule:", error);
-      Notiflix.Report.failure("Otomatisasi Gagal", error.response?.data?.message, "Okay");
+      Notiflix.Report.failure("Otomatisasi Gagal", error.response?.data?.message || "Terjadi kesalahan.", "Okay");
     }
-  }, [user, selectedCandidate, handleUpdateApplication]); // <-- Tambahkan dependensi
+  }, [fetchAllData]);
 
-  // --- (Handler Modal... tetap sama) ---
+  // --- ✅ HANDLER MODAL (Tidak Berubah) ---
   const openScheduleModal = (candidate) => {
     setSelectedCandidate(candidate);
     setShowScheduleModal(true);
@@ -167,14 +184,12 @@ function InterviewSchedulePage() {
     setSelectedCandidate(null);
   };
   
-  // --- (Handler Aksi Modals... tetap sama) ---
+  // --- ✅ HANDLER SUBMIT (Tidak Berubah) ---
   const handleSubmitSchedule = (formData) => {
-    // Tentukan tipe wawancara berdasarkan status kandidat
     const type = ['INTERVIEW_QUEUED'].includes(selectedCandidate.status) ? 'manager' : 'final_onboarding';
     handleTriggerSchedule(selectedCandidate.id, formData, type);
     closeModal();
   };
-
   const handleSubmitManagerFeedback = (formData) => {
     const newStatus = formData.decision === 'Hire' ? 'PENDING_FINAL_DECISION' : 'STAFF_REJECTED'; 
     const payload = {
@@ -188,7 +203,6 @@ function InterviewSchedulePage() {
     handleUpdateApplication(selectedCandidate.id, payload, `Feedback dari Manajer telah disimpan.`);
     closeModal();
   };
-
   const handleSubmitFinalDecision = (formData) => {
     const newStatus = formData.decision === 'Hire' ? 'HIRED' : 'NOT_HIRED';
     const payload = {
@@ -203,13 +217,14 @@ function InterviewSchedulePage() {
     closeModal();
   };
 
+  // --- ✅ RENDER JSX (Tidak Berubah) ---
   return (
     <div className="p-4">
       <h2 className="text-2xl font-semibold text-gray-800 mb-6">
         Manage Interview Schedule
       </h2>
       
-      {/* --- (Tombol Tab... tetap sama) --- */}
+      {/* Tombol Tab */}
       <div className="flex border-b border-gray-200 mb-4">
         <button
           onClick={() => setActiveTab('manager')}
@@ -235,7 +250,7 @@ function InterviewSchedulePage() {
         </button>
       </div>
       
-      {/* --- (Konten Tab... tetap sama) --- */}
+      {/* Konten Tab */}
       {loading ? (
         <div className="text-center text-gray-600 my-8 py-4">Memuat data wawancara...</div>
       ) : error ? (
@@ -268,7 +283,7 @@ function InterviewSchedulePage() {
         </>
       )}
       
-      {/* --- ✅ PERBAIKAN: Modal ScheduleInterviewModal sekarang menerima 'allApplications' --- */}
+      {/* 🔥 MODAL SCHEDULE: Kirim kalender yang sudah 100% dari "schedules" */}
       {showScheduleModal && (
         <ScheduleInterviewModal
           isOpen={showScheduleModal}
@@ -276,10 +291,11 @@ function InterviewSchedulePage() {
           onSubmit={handleSubmitSchedule}
           candidate={selectedCandidate}
           user={user}
-          allApplications={allApplications} // <-- KIRIM "KALENDER KEBENARAN"
+          existingEvents={masterCalendarEvents} // Prop name disesuaikan dengan modal
         />
       )}
       
+      {/* Modal Feedback */}
       {showFeedbackModal && (
         <InterviewFeedbackModal
           isOpen={showFeedbackModal}
@@ -287,7 +303,7 @@ function InterviewSchedulePage() {
           onSubmit={handleSubmitManagerFeedback}
           candidate={selectedCandidate}
           title="Manager Feedback"
-          decisionOptions={{ hire: "Hire", reject: "Not Hire" }} // (Hire/Not Hire)
+          decisionOptions={{ hire: "Hire", reject: "Not Hire" }}
         />
       )}
 
@@ -298,7 +314,7 @@ function InterviewSchedulePage() {
           onSubmit={handleSubmitFinalDecision}
           candidate={selectedCandidate}
           title="Final Decision (Head HR)"
-          decisionOptions={{ hire: "HIRED", reject: "NOT_HIRED" }} // (HIRED/NOT_HIRED)
+          decisionOptions={{ hire: "HIRED", reject: "NOT_HIRED" }}
         />
       )}
 

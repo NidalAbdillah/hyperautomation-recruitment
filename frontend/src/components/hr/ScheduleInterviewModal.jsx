@@ -9,8 +9,8 @@ import FullCalendar from '@fullcalendar/react';
 import dayGridPlugin from '@fullcalendar/daygrid';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
-import multiMonthPlugin from '@fullcalendar/multimonth'; // <-- Plugin Tahunan
-import idLocale from '@fullcalendar/core/locales/id'; // <-- Plugin Bahasa Indonesia (24-Jam)
+import multiMonthPlugin from '@fullcalendar/multimonth';
+import idLocale from '@fullcalendar/core/locales/id';
 
 function ScheduleInterviewModal({ 
   isOpen, 
@@ -18,20 +18,19 @@ function ScheduleInterviewModal({
   onSubmit, 
   candidate, 
   user,
-  allApplications // <-- "Kalender Kebenaran" kita
+  existingEvents // 🔥 GANTI NAMA: allApplications → existingEvents (lebih jelas)
 }) {
   
   // --- State (Default KOSONG) ---
   const [startTime, setStartTime] = useState(null);
   const [endTime, setEndTime] = useState(null);
   const [notes, setNotes] = useState("");
-  const calendarRef = useRef(null); // Ref untuk mengontrol API kalender
+  const calendarRef = useRef(null);
 
   // --- Mengisi Form saat Modal Dibuka ---
-// --- 2. PERBAIKAN: Gunakan useEffect untuk mengisi form ---
   useEffect(() => {
     if (isOpen && candidate) {
-      // Set waktu default (null)
+      // Reset waktu
       setStartTime(null);
       setEndTime(null);
 
@@ -39,76 +38,75 @@ function ScheduleInterviewModal({
       const preferensi = candidate.interview_notes?.preference || 'N/A';
       const catatanManajer = candidate.interview_notes?.manager_notes_for_candidate || "";
 
-      // 1. Buat template awal
       let templateDefault = `
-          Halo ${candidate.fullName},
+Halo ${candidate.fullName},
 
-          Anda diundang untuk wawancara (Preferensi: ${preferensi}).
+Anda diundang untuk wawancara (Preferensi: ${preferensi}).
 
-          Detail Wawancara:
-          (Detil waktu dan link/lokasi akan ditambahkan secara otomatis oleh sistem di bawah pesan ini.)
-          ---
-          `;
+Detail Wawancara:
+(Detil waktu dan link/lokasi akan ditambahkan secara otomatis oleh sistem di bawah pesan ini.)
+---
+`;
 
-                // 2. Tambahkan catatan manajer (jika ada)
-                if (catatanManajer) {
-                  templateDefault += `
-          Catatan/Instruksi dari Manajer:
-          ${catatanManajer}
-          `;
+      if (catatanManajer) {
+        templateDefault += `
+Catatan/Instruksi dari Manajer:
+${catatanManajer}
+`;
       }
       
-      // 3. Set state 'notes' dengan template yang sudah jadi
       setNotes(templateDefault.trim()); 
-      // --- BATAS LOGIKA TEMPLATE ---
     }
-  }, [isOpen, candidate]); // Jalankan saat modal dibuka
+  }, [isOpen, candidate]);
 
-  // --- Logika "Kalender Kebenaran" (Mengubah data DB menjadi Event) ---
+  // --- 🔥 ROMBAKAN UTAMA: Kalender Langsung Menerima Data dari Parent ---
   const calendarEvents = useMemo(() => {
-    if (!allApplications) return [];
+    if (!existingEvents || !Array.isArray(existingEvents)) return [];
     
-    return allApplications
-      .filter(app => 
-        ["INTERVIEW_SCHEDULED", "PENDING_FINAL_DECISION", "HIRED", "ONBOARDING"].includes(app.status) &&
-        app.interview_notes?.scheduled_time &&
-        app.id !== candidate.id // <-- Tambahan: Jangan blok jadwal kandidat ini sendiri
-      )
-      .map(app => ({
-        title: `Booked: ${app.fullName.split(' ')[0]}`, 
-        start: new Date(app.interview_notes.scheduled_time),
-        end: app.interview_notes.scheduled_end_time 
-             ? new Date(app.interview_notes.scheduled_end_time) 
-             : moment(app.interview_notes.scheduled_time).add(1, 'hour').toDate(), 
-        allDay: false,
-        backgroundColor: '#6B7280', 
-        borderColor: '#6B7280',
-        overlap: false, // <-- Event ini tidak boleh ditimpa
+    // 🎯 TIDAK PERLU FILTER LAGI!
+    // Data sudah diformat dengan benar dari InterviewSchedulePage.jsx
+    // Tinggal tampilkan saja, TAPI exclude kandidat yang sedang dijadwalkan
+    
+    return existingEvents
+      .filter(event => {
+        // Jangan tampilkan event kandidat ini sendiri (jika ada)
+        // Cek berdasarkan title (karena format dari parent: "Interview: NamaKandidat")
+        const candidateFirstName = candidate.fullName.split(' ')[0];
+        const isCurrentCandidate = event.title.toLowerCase().includes(candidateFirstName.toLowerCase());
+        
+        return !isCurrentCandidate; // Exclude kandidat ini
+      })
+      .map(event => ({
+        // Gunakan data yang sudah diformat dari parent
+        id: event.id,
+        title: event.title, // Sudah format yang benar dari parent
+        start: event.start, // Sudah Date object atau ISO string
+        end: event.end,
+        allDay: event.allDay || false,
+        backgroundColor: event.backgroundColor || '#6B7280',
+        borderColor: event.borderColor || '#6B7280',
+        overlap: false, // Event tidak bisa ditimpa
+        extendedProps: event.extendedProps || {}
       }));
-  }, [allApplications, candidate]); // <-- Tambahkan candidate di dependency
+  }, [existingEvents, candidate]);
 
   if (!isOpen) return null;
 
   // --- Handler Saat Menandai Waktu (Klik & Geser) ---
   const handleDateSelect = (selectionInfo) => {
-    // 'selectionInfo' berisi 'start' dan 'end' dari blok yang Anda tandai
     setStartTime(selectionInfo.start);
     setEndTime(selectionInfo.end);
   };
   
-  // --- Handler Saat Klik Kotak Kosong (di view Bulan/Tahun) ---
+  // --- Handler Saat Klik Kotak Kosong ---
   const handleDateClick = (clickInfo) => {
     const viewType = clickInfo.view.type;
     
-    // Jika diklik di view Waktu (Week/Day), set waktunya
     if (viewType === 'timeGridWeek' || viewType === 'timeGridDay') {
       setStartTime(clickInfo.date);
-      // Set endTime 30 menit setelahnya (default)
       setEndTime(moment(clickInfo.date).add(30, 'minutes').toDate());
     } 
-    // Jika diklik di view Tanggal (Month/Year)
     else if (viewType === 'dayGridMonth' || viewType === 'multiMonthYear') {
-      // Pindahkan view ke harian (Day)
       if (calendarRef.current) {
         const calendarApi = calendarRef.current.getApi();
         calendarApi.changeView('timeGridDay', clickInfo.dateStr); 
@@ -116,11 +114,10 @@ function ScheduleInterviewModal({
     }
   };
 
-  // --- Handler Saat Klik Nama Bulan (di view Tahun) ---
+  // --- Handler Saat Klik Nama Bulan ---
   const handleMonthLinkClick = (clickInfo) => {
     if (calendarRef.current) {
       const calendarApi = calendarRef.current.getApi();
-      // Pindah ke view bulanan (Month)
       calendarApi.changeView('dayGridMonth', clickInfo.date);
     }
   };
@@ -128,7 +125,7 @@ function ScheduleInterviewModal({
   // --- Handler Tombol Submit ---
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Validasi: Pastikan waktu sudah dipilih
+    
     if (!startTime || !endTime) {
       Notiflix.Report.warning(
         "Waktu Belum Dipilih", 
@@ -137,14 +134,15 @@ function ScheduleInterviewModal({
       );
       return;
     }
+    
     onSubmit({
-      dateTime: startTime,  // (Nama variabel di 'onSubmit' tetap 'dateTime' agar konsisten)
-      endTime: endTime,   // Kirim endTime
-      notes_from_hr: notes, // Kirim pesan (yang mungkin sudah diedit HR)
+      dateTime: startTime,
+      endTime: endTime,
+      notes_from_hr: notes,
     });
   };
   
-  // --- Format Tampilan Waktu (Sudah Benar) ---
+  // --- Format Tampilan Waktu ---
   const formatSelectedTime = () => {
     if (!startTime || !endTime) {
       return "Silakan pilih (klik & geser) slot di kalender...";
@@ -155,12 +153,11 @@ function ScheduleInterviewModal({
     return `${moment(startTime).format("DD MMM (HH:mm)")} - ${moment(endTime).format("DD MMM (HH:mm)")}`;
   };
 
-  // --- Logika Tombol Nonaktif (Disabled) ---
+  // --- Logika Tombol Nonaktif ---
   const isSubmitDisabled = !startTime || !endTime;
 
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" style={{ backdropFilter: 'blur(2px)' }}>
-      {/* Modal Gede (max-w-6xl) */}
       <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl mx-auto flex flex-col max-h-[90vh]">
         
         {/* Header Modal */}
@@ -178,19 +175,38 @@ function ScheduleInterviewModal({
           <div className="w-full md:w-1/3 p-6 space-y-4 overflow-y-auto border-r flex-shrink-0">
             <div>
               <label className="block text-sm font-medium text-gray-700">Kandidat</label>
-              <input type="text" value={candidate.fullName} readOnly className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed" />
+              <input 
+                type="text" 
+                value={candidate.fullName} 
+                readOnly 
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed" 
+              />
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700">Posisi</label>
-              <input type="text" value={candidate.qualification} readOnly className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed" />
+              <input 
+                type="text" 
+                value={candidate.qualification} 
+                readOnly 
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed" 
+              />
             </div>
+            
             <div>
               <label className="block text-sm font-medium text-gray-700">Preferensi Manajer</label>
-              <input type="text" value={candidate.interview_notes?.preference || 'N/A'} readOnly className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed" />
+              <input 
+                type="text" 
+                value={candidate.interview_notes?.preference || 'N/A'} 
+                readOnly 
+                className="mt-1 block w-full p-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed" 
+              />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700">Waktu Terpilih (Klik & Geser di Kalender)</label>
+              <label className="block text-sm font-medium text-gray-700">
+                Waktu Terpilih (Klik & Geser di Kalender)
+              </label>
               <input 
                 type="text" 
                 value={formatSelectedTime()} 
@@ -207,8 +223,8 @@ function ScheduleInterviewModal({
               </label>
               <textarea
                 id="notes"
-                value={notes} // <-- Nilai defaultnya dari 'useEffect'
-                onChange={(e) => setNotes(e.target.value)} // <-- Staff HR bisa mengedit
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
                 rows={5}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
                 placeholder="Pesan kustom dari Manajer akan muncul di sini (jika ada)..."
@@ -216,34 +232,30 @@ function ScheduleInterviewModal({
             </div>
           </div>
 
-          {/* --- KOLOM KANAN: KALENDER BESAR (FULLCALENDAR) --- */}
+          {/* --- KOLOM KANAN: KALENDER BESAR --- */}
           <div className="w-full md:w-2/3 p-4 flex-grow overflow-y-auto">
             <FullCalendar
               ref={calendarRef} 
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, multiMonthPlugin]} 
-              locale={idLocale} // <-- Paksa 24-jam & Bahasa Indonesia
+              locale={idLocale}
               initialView="timeGridWeek"
               headerToolbar={{
                 left: 'prev,next today',
                 center: 'title',
-                right: 'multiMonthYear,dayGridMonth,timeGridWeek,timeGridDay' // <-- Ada 'Year'
+                right: 'multiMonthYear,dayGridMonth,timeGridWeek,timeGridDay'
               }}
-              events={calendarEvents} // <-- Data dari DB
-              
-              // --- INI PERUBAHANNYA ---
-              selectOverlap={false} // <-- INI YANG PALING PENTING
-              // --- BATAS PERUBAHAN ---
-              
-              select={handleDateSelect} // <-- Handler untuk "Menandai"
-              dateClick={handleDateClick} // <-- Handler untuk "Klik" (di Month/Year)
-              navLinks={true} // <-- Angka hari bisa diklik
-              navLinkMonthClick={handleMonthLinkClick} // <-- Nama bulan (di Year) bisa diklik
+              events={calendarEvents} // 🔥 Data sudah bersih dari parent
+              selectOverlap={false} // 🎯 PENTING: Tidak bisa select di atas event
+              select={handleDateSelect}
+              dateClick={handleDateClick}
+              navLinks={true}
+              navLinkMonthClick={handleMonthLinkClick}
               editable={false}
               selectable={true}
               selectMirror={true}
               allDaySlot={false}
               slotMinTime="08:00:00"
-              slotMaxTime="18:00:00" // (Menampilkan slot 17:00 - 18:00)
+              slotMaxTime="18:00:00"
               height="auto"
               slotLabelFormat={{
                 hour: '2-digit',
@@ -260,18 +272,22 @@ function ScheduleInterviewModal({
           
         </form>
 
-        {/* Tombol Aksi di Footer */}
+        {/* Footer */}
         <div className="flex justify-end gap-3 p-4 border-t bg-gray-50 flex-shrink-0">
-          <button type="button" onClick={onClose} className="text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50">
+          <button 
+            type="button" 
+            onClick={onClose} 
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+          >
             Batal
           </button>
           <button 
             type="button" 
             onClick={handleSubmit}
-            disabled={isSubmitDisabled} // <-- Logika Tombol Nonaktif
+            disabled={isSubmitDisabled}
             className={`px-4 py-2 text-sm font-medium text-white rounded-md shadow-sm ${
               isSubmitDisabled 
-                ? 'bg-gray-400 cursor-not-allowed' // <-- Tampilan Nonaktif
+                ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-blue-600 hover:bg-blue-700'
             }`}
           >
