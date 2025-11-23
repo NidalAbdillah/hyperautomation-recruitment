@@ -308,24 +308,37 @@ const bulkDownloadController = async (req: Request, res: Response) => {
     }
 };
 
+// src/controllers/applications.controller.ts
+
 const triggerSchedule = async (req: Request, res: Response) => {
   try {
     const applicationId = parseInt(req.params.id, 10);
-    const scheduleData = req.body; // Ini berisi { dateTime, endTime, notes_from_hr }
-    const hrUser = req.user; // Diambil dari middleware authenticate
+    const scheduleData = req.body; // { dateTime, endTime, notes_from_hr, type, preference }
+    const hrUser = (req as any).user; // Pastikan user ada
 
     if (isNaN(applicationId)) {
       const err: any = new Error("Invalid application ID."); err.status = 400; throw err;
     }
-    // Validasi data yang dikirim dari frontend
-    if (!scheduleData.dateTime || !scheduleData.endTime) {
-      const err: any = new Error("dateTime and endTime are required in body."); err.status = 400; throw err;
+    
+    // --- 🔥 TAMBAHAN VALIDASI ---
+    // Pastikan 'type' ada agar Service tidak salah langkah
+    if (!scheduleData.type) {
+        const err: any = new Error("Interview type (manager/final_hr) is required."); 
+        err.status = 400; 
+        throw err;
     }
+
+    if (!scheduleData.dateTime || !scheduleData.endTime) {
+      const err: any = new Error("dateTime and endTime are required."); err.status = 400; throw err;
+    }
+    
     if (!hrUser) {
       const err: any = new Error("HR User not authenticated."); err.status = 401; throw err;
     }
 
-    // Panggil service yang baru kita buat
+    console.log(`Controller: Triggering schedule ${scheduleData.type} for App ID ${applicationId}`);
+
+    // Panggil Service
     const updatedApplication = await applicationService.triggerScheduleWorkflow(
       applicationId,
       scheduleData,
@@ -333,7 +346,7 @@ const triggerSchedule = async (req: Request, res: Response) => {
     );
 
     res.status(200).json({
-      message: "Schedule workflow triggered and application updated.",
+      message: `Schedule triggered for ${scheduleData.type}.`,
       application: updatedApplication,
     });
 

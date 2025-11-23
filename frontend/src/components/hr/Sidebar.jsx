@@ -8,7 +8,7 @@ import Notiflix from "notiflix";
 import {
   House, FileText, Star, Archive, Users, Briefcase,
   Gear, SignOut, CaretLeft, CaretRight, ArrowLineLeft,
-  ClipboardText, CheckSquare, CalendarCheck, Calendar
+  ClipboardText, CheckSquare, CalendarCheck, Calendar, SealCheck, UserPlus
 } from "@phosphor-icons/react";
 
 import logoWhite from "../../images/logo-white.png";
@@ -94,48 +94,8 @@ const mainMenuItems = [
       hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
       allowedRoles: ["head_hr", "staff_hr", "manager"] 
     },
-    // --- GRUP 2: MANAJEMEN KANDIDAT ---
-    { 
-      path: "/hr/manage-cv", 
-      label: "CV Applications", 
-      icon: FileText, 
-      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
-      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
-      allowedRoles: ["head_hr", "staff_hr"]
-    },
-    { 
-      path: "/hr/top-ranking", 
-      label: "Top Candidates", 
-      icon: Star, 
-      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
-      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
-      allowedRoles: ["head_hr", "staff_hr", "manager"]
-    },
-    { 
-      path: "/hr/schedule-interview", 
-      label: "Interview Schedule", 
-      icon: CalendarCheck, 
-      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
-      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
-      allowedRoles: ["head_hr", "staff_hr", "manager"]
-    },
-        { 
-      path: "/hr/event-calendar", // <-- Path yang kita daftarkan di App.jsx
-      label: "Event Calendar", 
-      icon: Calendar, // <-- Icon baru
-      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
-      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
-      allowedRoles: ["head_hr", "staff_hr"] // (Kita set untuk HR saja)
-    },
-    { 
-      path: "/hr/archived", 
-      label: "Archived Center", 
-      icon: Archive, 
-      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
-      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
-      allowedRoles: ["head_hr", "staff_hr"]
-    },
-    // --- GRUP 3: MANAJEMEN LOWONGAN (Alur Request-to-Hire) ---
+
+    // --- GRUP 2: MANAJEMEN LOWONGAN ---
     { 
       path: "/hr/request-position", 
       label: "Request Position", 
@@ -154,13 +114,90 @@ const mainMenuItems = [
     },
     { 
       path: "/hr/manage-job-openings", 
-      label: "Manage Job Openings", 
+      label: "Job Openings", 
       icon: Briefcase, 
       gradient: "from-[#1e3b5c] to-[#2c5f8d]",
       hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
       allowedRoles: ["head_hr", "staff_hr"]
     },
-    // --- GRUP 4: ADMINISTRASI SISTEM ---
+
+    // --- GRUP 3: MANAJEMEN KANDIDAT (CORE) ---
+    { 
+      path: "/hr/manage-cv", 
+      label: "CV Applications", 
+      icon: FileText, 
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr"]
+    },
+    { 
+      path: "/hr/top-ranking", 
+      label: "Top Candidates", 
+      icon: Star, 
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr", "manager"]
+    },
+
+    // --- GRUP 4: WAWANCARA & KEPUTUSAN (NEW FLOW) ---
+    
+    // 1. Tahap Manajer (Semua bisa lihat)
+    { 
+      path: "/hr/interviews", 
+      label: "Manager Interview", 
+      icon: Users, 
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr", "manager"]
+    },
+
+    // 2. Tahap Penjadwalan Final (Hanya Staff HR yang ngurus logistik)
+    { 
+      path: "/hr/final-scheduling", 
+      label: "Final Scheduling", 
+      icon: CalendarCheck, 
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr"]
+    },
+    { 
+      path: "/hr/onboarding", 
+      label: "Onboarding", 
+      icon: UserPlus, // Import dari heroicons/phosphor
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]", 
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr"]
+    },
+
+    // 3. Tahap Keputusan Akhir (Hanya Head HR Eksekusi)
+    { 
+      path: "/hr/final-decision", 
+      label: "Final Decision", 
+      icon: SealCheck, // Ganti icon biar beda (atau Briefcase)
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr"]
+    },
+
+    // --- GRUP 5: UTILITIES ---
+    { 
+      path: "/hr/event-calendar", 
+      label: "HR Calendar", 
+      icon: Calendar, 
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr"]
+    },
+    { 
+      path: "/hr/archived", 
+      label: "Archives", 
+      icon: Archive, 
+      gradient: "from-[#1e3b5c] to-[#2c5f8d]",
+      hoverBg: "hover:from-[#1e3b5c]/20 hover:to-[#2c5f8d]/10",
+      allowedRoles: ["head_hr", "staff_hr"]
+    },
+    
+    // --- GRUP 6: ADMIN ---
     { 
       path: "/hr/manage-users", 
       label: "Staff Management", 

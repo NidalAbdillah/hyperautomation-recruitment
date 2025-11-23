@@ -5,7 +5,7 @@ import Notiflix from "notiflix";
 import PdfViewerModal from "../../components/PdfViewerModal";
 import CandidateRankCard from "../../components/hr/CandidateRankCard";
 import { useAuth } from "../../context/AuthContext";
-import ManagerSelectModal from "../../components/hr/ManagerSelectModal"; // <-- 1. IMPORT MODAL BARU
+import ManagerSelectModal from "../../components/hr/ManagerSelectModal";
 
 import {
   ChevronDownIcon,
@@ -18,7 +18,7 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { useNavigate } from "react-router-dom";
 
-// --- (API Endpoints & Helper... tetap sama) ---
+// --- API CONFIG ---
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 const API_GET_RANKING_URL = `${API_BASE_URL}/api/hr/applications/ranking`;
 const API_VIEW_URL = (id) => `${API_BASE_URL}/api/hr/applications/${id}/view-cv`;
@@ -33,24 +33,23 @@ function TopRankingPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // State Modal CV Viewer (Lama)
+  // State Modal CV Viewer
   const [showPdfModal, setShowPdfModal] = useState(false);
   const [pdfUrlToView, setPdfUrlToView] = useState(null);
   const [viewingCv, setViewingCv] = useState(null);
   
-  // --- 2. STATE BARU UNTUK MODAL SELEKSI MANAJER ---
+  // State Modal Manajer (Baru)
   const [showSelectModal, setShowSelectModal] = useState(false);
   const [candidateToSelect, setCandidateToSelect] = useState(null);
-  // --- BATAS STATE BARU ---
 
-  // State Filter (Lama)
+  // State Filter
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [qualificationFilter, setQualificationFilter] = useState("");
   const [dateFilter, setDateFilter] = useState(null);
   const [limit, setLimit] = useState(10);
 
-  // (fetchRankedData... tetap sama)
+  // Fetch Ranked Data
   const fetchRankedData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -84,7 +83,7 @@ function TopRankingPage() {
     fetchRankedData();
   }, [fetchRankedData]);
 
-  // (Filter Options & Handlers... tetap sama)
+  // Filter Options
   const availableStatuses = useMemo(
     () => [
       { value: "", label: "All Status (Ranked)" },
@@ -98,6 +97,7 @@ function TopRankingPage() {
     ],
     []
   );
+  
   const availableQualifications = useMemo(() => {
     const qualifications = rankedData
       .map((item) => item.qualification)
@@ -108,6 +108,8 @@ function TopRankingPage() {
       label: q || "All Qualifications",
     }));
   }, [rankedData]);
+
+  // Filter Handlers
   const handleSearchChange = (e) => setSearchTerm(e.target.value);
   const handleStatusFilterChange = (e) => setStatusFilter(e.target.value);
   const handleQualificationFilterChange = (e) =>
@@ -119,8 +121,9 @@ function TopRankingPage() {
       setLimit(newLimit);
     }
   };
+
+  // View CV Handler
   const handleViewDetail = useCallback(async (cv) => {
-    // ... (Fungsi ini tidak berubah)
     if (!cv.cvFileObjectKey) {
       Notiflix.Report.warning("File Not Available", "CV file not found.", "Okay");
       return;
@@ -147,8 +150,8 @@ function TopRankingPage() {
       Notiflix.Report.failure("Failed to Load CV", error.response?.data?.message, "Okay");
     }
   }, []);
+
   const handleClosePdfModal = useCallback(() => {
-    // ... (Fungsi ini tidak berubah)
     setShowPdfModal(false);
     if (pdfUrlToView) {
       window.URL.revokeObjectURL(pdfUrlToView);
@@ -157,8 +160,7 @@ function TopRankingPage() {
     setViewingCv(null);
   }, [pdfUrlToView]);
 
-
-  // --- 3. HELPER API GENERIK (BARU) ---
+  // Generic Update Application Helper
   const handleUpdateApplication = useCallback(
     async (applicationId, payload, successMessage) => {
       Notiflix.Loading.standard("Mengupdate...");
@@ -182,10 +184,10 @@ function TopRankingPage() {
         );
       }
     },
-    [fetchRankedData] // Tambahkan dependensi
+    [fetchRankedData]
   );
 
-  // --- 4. ROMBAK HANDLER UNTUK MEMBUKA MODAL ---
+  // Modal Handlers
   const openSelectModal = (cv) => {
     setCandidateToSelect(cv);
     setShowSelectModal(true);
@@ -196,29 +198,43 @@ function TopRankingPage() {
     setShowSelectModal(false);
   };
 
-  // --- 5. HANDLER BARU UNTUK SUBMIT MODAL ---
+  // --- ✅ PERBAIKAN UTAMA: FUNGSI INI SEKARANG SIMPAN USULAN TANGGAL ---
   const handleSubmitSelection = (formData) => {
-    // formData berisi { preference, manager_notes_for_candidate }
+    // formData dari ManagerSelectModal.jsx sekarang berisi:
+    // {
+    //   preference: "Online" / "Offline",
+    //   manager_notes_for_candidate: "...",
+    //   proposedStart: Date object,
+    //   proposedEnd: Date object
+    // }
     
     const payload = {
-      status: "INTERVIEW_QUEUED", // Status baru
+      status: "INTERVIEW_QUEUED", // Status tetap: Menunggu HR
       interview_notes: {
-        ...(candidateToSelect.interview_notes || {}), // Pertahankan notes lama (jika ada)
+        // Pertahankan data lama (jika ada)
+        ...(candidateToSelect.interview_notes || {}),
+        
+        // Data dari form modal
         preference: formData.preference,
         manager_notes_for_candidate: formData.manager_notes_for_candidate,
+        
+        // --- ✅ DATA BARU: USULAN TANGGAL DARI KALENDER ---
+        manager_proposed_start: formData.proposedStart, // Simpan tanggal mulai
+        manager_proposed_end: formData.proposedEnd       // Simpan tanggal selesai
       }
     };
     
     handleUpdateApplication(
       candidateToSelect.id, 
       payload, 
-      `Kandidat ${candidateToSelect.fullName} telah dipindahkan ke Antrian Wawancara.`
+      `Usulan jadwal untuk ${candidateToSelect.fullName} telah dikirim ke Antrian HR.`
     );
     
-    closeSelectModal(); // Tutup modal setelah submit
+    closeSelectModal();
   };
+  // --- BATAS PERBAIKAN ---
 
-  // --- 6. HANDLER CLEAR (Undo) TETAP SAMA ---
+  // Clear Interview Choice Handler
   const handleClearInterviewChoice = useCallback(
     (cv) => {
       Notiflix.Confirm.show(
@@ -230,11 +246,14 @@ function TopRankingPage() {
           handleUpdateApplication(
             cv.id, 
             { 
-              status: "STAFF_APPROVED", // Kembalikan ke status saringan HR
+              status: "STAFF_APPROVED",
               interview_notes: {
                 ...(cv.interview_notes || {}),
-                preference: null, // Hapus preferensi
-                manager_notes_for_candidate: null // Hapus catatan
+                preference: null,
+                manager_notes_for_candidate: null,
+                // Hapus juga usulan tanggal (jika ada)
+                manager_proposed_start: null,
+                manager_proposed_end: null
               }
             },
             "Pilihan telah dibersihkan."
@@ -244,25 +263,24 @@ function TopRankingPage() {
         { titleColor: "#EF4444", okButtonBackground: "#EF4444" }
       );
     },
-    [handleUpdateApplication] // Dependensi ke helper API baru
+    [handleUpdateApplication]
   );
-  // --- BATAS PERBAIKAN HANDLER ---
 
-
-  // --- Render ---
+  // --- RENDER ---
   return (
     <div className="manage-cv-page-container p-4">
-      {/* (Header... tetap sama) */}
+      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-semibold text-gray-800 flex items-center mb-8">
+          <TrophyIcon className="h-8 w-8 text-yellow-500 mr-2" />
           Top Candidate Ranking
         </h2>
       </div>
 
-      {/* --- Filter Bar (Tidak ada perubahan) --- */}
+      {/* Filter Bar */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-4 p-3 rounded">
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-          {/* (Input Search) */}
+          {/* Search Input */}
           <input
             type="text"
             placeholder="Search..."
@@ -270,7 +288,8 @@ function TopRankingPage() {
             onChange={handleSearchChange}
             className="shadow-sm border border-gray-300 rounded py-2 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 focus:border-gray-500 flex-grow md:flex-grow-0 md:w-48"
           />
-          {/* (Dropdown Status) */}
+          
+          {/* Status Dropdown */}
           <div className="relative w-full sm:w-auto">
             <select
               value={statusFilter}
@@ -282,10 +301,11 @@ function TopRankingPage() {
                   {s.label}
                 </option>
               ))}
-            </select>{" "}
+            </select>
             <ChevronDownIcon className="h-4 w-4 pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500" />
           </div>
-          {/* (Dropdown Kualifikasi) */}
+          
+          {/* Qualification Dropdown */}
           <div className="relative w-full sm:w-auto">
             <select
               value={qualificationFilter}
@@ -297,10 +317,11 @@ function TopRankingPage() {
                   {q.label}
                 </option>
               ))}
-            </select>{" "}
+            </select>
             <ChevronDownIcon className="h-4 w-4 pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500" />
           </div>
-          {/* (DatePicker) */}
+          
+          {/* Date Picker */}
           <div className="relative w-full sm:w-auto min-w-[150px]">
             <DatePicker
               selected={dateFilter}
@@ -314,7 +335,8 @@ function TopRankingPage() {
               <CalendarDaysIcon className="h-5 w-5 text-gray-400 absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none" />
             )}
           </div>
-          {/* (Input Limit) */}
+          
+          {/* Limit Selector */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <label
               htmlFor="limit-select"
@@ -334,7 +356,8 @@ function TopRankingPage() {
             </select>
           </div>
         </div>
-        {/* (Tombol Aksi Kanan) */}
+        
+        {/* Action Buttons */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={fetchRankedData}
@@ -353,24 +376,28 @@ function TopRankingPage() {
         </div>
       </div>
 
-      {/* (Loading / Empty / Error State... tetap sama) */}
+      {/* Loading State */}
       {loading && (
         <div className="text-center text-gray-600 my-8 py-4">
           Loading candidate rankings...
         </div>
       )}
+
+      {/* Error State */}
       {!loading && error && (
         <div className="text-center text-red-500 my-8 py-4">
           Failed to load rankings. Please try again.
         </div>
       )}
+
+      {/* Empty State */}
       {!loading && !error && rankedData.length === 0 && (
         <div className="text-center text-gray-500 my-8 py-4">
           No candidates found matching the current filters.
         </div>
       )}
 
-      {/* --- 7. KIRIM HANDLER BARU KE KARTU --- */}
+      {/* Candidate Cards */}
       {!loading && !error && rankedData.length > 0 && (
         <div className="flex flex-col gap-6">
           {rankedData.map((cv, index) => (
@@ -379,19 +406,15 @@ function TopRankingPage() {
               cv={cv}
               rank={index + 1}
               onViewDetail={handleViewDetail}
-              // --- Props Baru ---
               userRole={user?.role}
-              onSelectForInterview={openSelectModal} // <-- Ganti ke pembuka modal
+              onSelectForInterview={openSelectModal}
               onClearInterviewChoice={handleClearInterviewChoice}
-              // --- Batas Props Baru ---
             />
           ))}
         </div>
       )}
-      {/* --- BATAS PERUBAIKAN --- */}
 
-
-      {/* (Modal PDF Viewer... tetap sama) */}
+      {/* PDF Viewer Modal */}
       <PdfViewerModal
         isOpen={showPdfModal}
         onClose={handleClosePdfModal}
@@ -399,14 +422,13 @@ function TopRankingPage() {
         viewingCv={viewingCv}
       />
       
-      {/* --- 8. RENDER MODAL BARU DI SINI --- */}
+      {/* Manager Selection Modal (WITH CALENDAR) */}
       <ManagerSelectModal
         isOpen={showSelectModal}
         onClose={closeSelectModal}
         onSubmit={handleSubmitSelection}
         candidate={candidateToSelect}
       />
-      
     </div>
   );
 }

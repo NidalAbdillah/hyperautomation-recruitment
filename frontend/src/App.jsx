@@ -16,12 +16,15 @@ import ManageCVsPage from "./pages/hr/ManageCVsPage.jsx";
 import ArchiveCenterPage from "./pages/hr/ArchiveCenterPage.jsx";
 import ManageJobPositionsPage from "./pages/hr/ManageJobPositionsPage.jsx";
 import TopRankingPage from "./pages/hr/TopRankingPage.jsx";
+import OnboardingPage from './pages/hr/OnboardingPage';
 
 // --- PERBAIKAN 1: Impor Halaman Baru ---
 import RequestPositionPage from "./pages/hr/RequestPositionPage.jsx"; // <-- Halaman baru untuk Manager
 import ApprovePositionsPage from "./pages/hr/ApprovePositionsPage.jsx"; // <-- (Kita tambahkan ini sekalian)
-import InterviewSchedulePage from "./pages/hr/InterviewSchedulePage.jsx"; // <-- (Kita tambahkan ini sekalian)
 import SchedulePage from "./pages/hr/SchedulePage.jsx";
+import InterviewSchedulePage from './pages/hr/InterviewSchedulePage'; // Tahap 1 (Manager)
+import FinalSchedulePage from './pages/hr/FinalSchedulePage';         // Tahap 2 (Staff HR Jadwalin)
+import HeadHrFinalDecisionPage from './pages/hr/HeadHrFinalDecisionPage'; // Tahap 3 (Head HR Putusin)
 // --- BATAS PERBAIKAN 1 ---
 
 // Layouts
@@ -95,7 +98,7 @@ function App() {
           {/* Grup 2: Manajemen Kandidat */}
           <Route path="manage-cv" element={<ManageCVsPage />} />
           <Route path="top-ranking" element={<TopRankingPage />} />
-          <Route path="schedule-interview" element={<InterviewSchedulePage />} />
+          <Route path="interviews" element={<InterviewSchedulePage />} />
           <Route path="archived" element={<ArchiveCenterPage />} />
           
           {/* Grup 3: Manajemen Lowongan (Sesuai Alur 3-Status) */}
@@ -103,12 +106,16 @@ function App() {
           <Route path="approve-positions" element={<ApprovePositionsPage />} />
           <Route path="event-calendar" element={<SchedulePage />} />
           <Route path="manage-job-openings" element={<ManageJobPositionsPage />} />
+          <Route path="final-scheduling" element={<FinalSchedulePage />} />
+          <Route path="final-decision" element={<HeadHrFinalDecisionPage />} />
+          <Route path="onboarding" element={<OnboardingPage />} />
+          
           
           {/* Grup 4: Administrasi Sistem */}
           <Route path="manage-users" element={<ManageUsersPage />} />
           {/* <Route path="settings" element={<SettingsPage />} /> */}
           {/* --- BATAS PERBAIKAN 2 --- */}
-          
+          <Route path="final-decision" element={<HeadHrFinalDecisionPage />} />
         </Route>
 
         {/* Fallback */}

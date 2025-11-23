@@ -27,7 +27,7 @@ function InterviewScheduleTable({
       if (role === 'staff_hr' && status === 'INTERVIEW_QUEUED') {
         return (
           <button 
-            onClick={() => onOpenSchedule(cv)}
+            onClick={() => onOpenSchedule(cv, 'manager')}
             className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
             title="Jadwalkan wawancara ini"
           >
@@ -51,28 +51,52 @@ function InterviewScheduleTable({
 
     // --- LOGIKA TAB 2: KEPUTUSAN FINAL HR ---
     if (tableType === 'final') {
-      // Tugas Kepala HR: Memberi Keputusan Final
-      if (role === 'head_hr' && status === 'PENDING_FINAL_DECISION') {
-         return (
+      
+      // 2a. Staff/Head HR: Jadwalkan Wawancara Final
+      if ((role === 'staff_hr' || role === 'head_hr') && status === 'PENDING_FINAL_DECISION') {
+        return (
+          <button 
+            onClick={() => onOpenSchedule(cv, 'final')}
+            className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+            title="Jadwalkan wawancara final dengan Kepala HR"
+          >
+            <CalendarDaysIcon className="h-5 w-5" /> Jadwalkan (Final)
+          </button>
+        );
+      }
+
+      // 2b. Kepala HR: Beri Keputusan Final (setelah wawancara)
+      if (role === 'head_hr' && status === 'FINAL_INTERVIEW_SCHEDULED') {
+        return (
           <button 
             onClick={() => onOpenFeedback(cv)}
-            className="text-red-600 hover:text-red-900 flex items-center gap-1"
+            className="text-green-600 hover:text-green-900 flex items-center gap-1"
             title="Beri keputusan final (Hire / Not Hire)"
           >
             <CheckCircleIcon className="h-5 w-5" /> Keputusan Final
           </button>
         );
       }
-      // Tugas Staff HR: Proses Onboarding
+
+      // 2c. Staff HR: Proses Onboarding
       if (role === 'staff_hr' && status === 'HIRED') {
-         return (
+        return (
           <button 
-            onClick={() => onOpenSchedule(cv)} // (Bisa pakai modal schedule lagi)
+            onClick={() => onOpenSchedule(cv, 'onboarding')}
             className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
             title="Kirim email/undangan onboarding"
           >
             <PaperAirplaneIcon className="h-5 w-5" /> Kirim Onboarding
           </button>
+        );
+      }
+
+      // 2d. Status Selesai
+      if (status === 'NOT_HIRED' || status === 'ONBOARDING') {
+        return (
+          <span className="text-xs italic text-gray-500">
+            Proses Selesai
+          </span>
         );
       }
     }
@@ -118,16 +142,20 @@ function InterviewScheduleTable({
                     <div className="text-xs text-gray-500">{cv.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">{cv.qualification}</td>
+                  
+                  {/* 🔥 PERBAIKAN KOLOM STATUS & TANGGAL */}
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusInfo.color}`}>
                       {statusInfo.label}
                     </span>
-                    {cv.status === 'INTERVIEW_SCHEDULED' && (
+                    {/* ✅ Hanya tampilkan tanggal jika sudah SCHEDULED (bukan Queued/Pending) */}
+                    {(cv.status === 'INTERVIEW_SCHEDULED' || cv.status === 'FINAL_INTERVIEW_SCHEDULED') && (
                       <div className="text-xs text-gray-500 mt-1">
                         {formatDisplayDateTime(notes.scheduled_time)}
                       </div>
                     )}
                   </td>
+                  
                   <td className="px-6 py-4 text-sm text-gray-700">
                     {notes.preference && (
                       <div className="text-xs">
@@ -143,22 +171,25 @@ function InterviewScheduleTable({
                       </div>
                     )}
                   </td>
+                  
+                  {/* 🔥 PERBAIKAN KOLOM LOKASI/LINK */}
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
                     {(() => {
-                      // 1. Ambil data dari 'interview_notes' (yang sudah di-update N8N)
-                      const notes = cv.interview_notes;
-                      const preference = notes?.preference; // "Online" atau "Offline"
-                      const link = notes?.schedule_link;     // https://meet.google.com/...
+                      const preference = notes?.preference;
+                      const link = notes?.schedule_link;
                       
-                      // 2. Terapkan logika Anda
-                      if (cv.status === 'INTERVIEW_QUEUED') {
+                      // ✅ PERBAIKAN 1: Sembunyikan Link Lama saat masuk antrian baru
+                      if (cv.status === 'INTERVIEW_QUEUED' || cv.status === 'PENDING_FINAL_DECISION') {
                         return (
                           <span className="text-xs italic text-gray-500">
-                            Menunggu Jadwal dari HR...
+                            {cv.status === 'INTERVIEW_QUEUED' 
+                              ? 'Menunggu Jadwal Manajer...' 
+                              : 'Menunggu Jadwal Final (HR)...'}
                           </span>
                         );
                       }
                       
+                      // Logika biasa untuk status SCHEDULED
                       if (preference === 'Offline') {
                         return (
                           <span className="font-medium text-gray-800">
@@ -180,14 +211,14 @@ function InterviewScheduleTable({
                         );
                       }
 
-                      // Fallback jika online tapi link belum ada (seharusnya tidak terjadi)
                       return (
-                          <span className="text-xs italic text-gray-500">
-                            Online (Menunggu Link...)
-                          </span>
-                        );
+                        <span className="text-xs italic text-gray-500">
+                          Online (Menunggu Link...)
+                        </span>
+                      );
                     })()}
                   </td>
+                  
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     {renderActionButtons(cv)}
                   </td>

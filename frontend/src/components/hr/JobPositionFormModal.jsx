@@ -1,322 +1,230 @@
-// src/components/Admins/JobPositionFormModal.jsx
-import React, { useState, useEffect } from "react";
-import ReactDOM from "react-dom";
-import Editor from "react-simple-wysiwyg";
-import parse from "html-react-parser";
-import Notiflix from "notiflix";
-import { LockClosedIcon } from "@heroicons/react/24/solid";
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
+import { XMarkIcon } from '@heroicons/react/24/outline';
+import moment from 'moment';
+import Notiflix from 'notiflix';
+import Editor from 'react-simple-wysiwyg'; 
 
-// --- 1. TAMBAHKAN PROPS 'isReadOnly' ---
-const JobPositionFormModal = ({ 
+// FullCalendar Imports
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import multiMonthPlugin from '@fullcalendar/multimonth';
+import idLocale from '@fullcalendar/core/locales/id';
+
+function ScheduleInterviewModal({ 
   isOpen, 
   onClose, 
   onSubmit, 
-  initialData, 
-  isReadOnly = false // <-- Tambah prop baru
-}) => {
+  candidate, 
+  existingEvents = [], // 🔥 INI HARUS BERISI SEMUA JADWAL DARI DB
+  interviewStage = "manager" 
+}) {
   
-  // (State, useEffect... tetap sama)
-  const [formData, setFormData] = useState({
-    name: "", location: "", registrationStartDate: "",
-    registrationEndDate: "", availableSlots: 0, announcement: "",
-    specificRequirements: "",
-  });
-  const [specificRequirementsHtml, setSpecificRequirementsHtml] = useState("");
-  const [announcementHtml, setAnnouncementHtml] = useState("");
+  const [startTime, setStartTime] = useState(null);
+  const [endTime, setEndTime] = useState(null);
+  const [notes, setNotes] = useState("");
+  const [meetingType, setMeetingType] = useState('Online');
+  const calendarRef = useRef(null);
 
+  // --- LOGIKA UTAMA: PRE-FILL vs CLEAN SLATE ---
   useEffect(() => {
-    if (isOpen) {
-      if (initialData) {
-        // Mode Edit atau View
-        setFormData({
-          name: initialData.name || "",
-          location: initialData.location || "",
-          availableSlots: initialData.availableSlots || 0,
-          specificRequirements: initialData.specificRequirements || "",
-          registrationStartDate: initialData.registrationStartDate ? new Date(initialData.registrationStartDate).toISOString().split("T")[0] : "",
-          registrationEndDate: initialData.registrationEndDate ? new Date(initialData.registrationEndDate).toISOString().split("T")[0] : "",
-          announcement: initialData.announcement || "",
-        });
-        setSpecificRequirementsHtml(initialData.specificRequirements || "");
-        setAnnouncementHtml(initialData.announcement || "");
-      } else {
-        // Mode Tambah
-        setFormData({
-          name: "", location: "", registrationStartDate: "",
-          registrationEndDate: "", availableSlots: 0, announcement: "",
-          specificRequirements: "",
-        });
-        setSpecificRequirementsHtml("");
-        setAnnouncementHtml("");
+    if (isOpen && candidate) {
+      
+      let defaultStart = null;
+      let defaultEnd = null;
+      let isPreFilled = false;
+
+      // ✅ 1. SET DEFAULT TIPE MEETING
+      // Kalau tahap Manager: Ikut preferensi awal kandidat
+      // Kalau tahap Final: Default Online (tapi bisa diubah)
+      const defaultPref = candidate.interview_notes?.preference || 'Online';
+      setMeetingType(defaultPref);
+
+      // ✅ 2. LOGIKA TANGGAL (INTI PERMINTAAN ANDA)
+      
+      // KONDISI A: TAHAP MANAGER (Ikuti Request Manajer)
+      if (interviewStage === 'manager') {
+        const proposedStart = candidate.interview_notes?.manager_proposed_start;
+        const proposedEnd = candidate.interview_notes?.manager_proposed_end;
+
+        if (proposedStart && proposedEnd) {
+          defaultStart = new Date(proposedStart);
+          defaultEnd = new Date(proposedEnd);
+          isPreFilled = true; // Tandai sudah diisi
+          console.log("✅ [Manager Mode] Mengisi form sesuai request Manajer");
+        }
+      } 
+      
+      // KONDISI B: TAHAP HR / FINAL (Bersih / Reset)
+      // Jika tahap Final, variabel isPreFilled pasti false (karena blok if di atas di-skip)
+      if (!isPreFilled) {
+         // Default: 1 jam dari sekarang (Hanya placeholder)
+         // Staff HR harus klik tanggal sendiri nanti
+         defaultStart = moment().add(1, 'hour').minute(0).second(0).toDate();
+         defaultEnd = moment(defaultStart).add(1, 'hour').toDate();
+         console.log(`🧹 [${interviewStage} Mode] Form di-reset bersih. Silakan pilih slot manual.`);
       }
+      
+      // Set State
+      setStartTime(defaultStart);
+      setEndTime(defaultEnd);
+      
+      // Pindahkan view kalender ke tanggal tersebut
+      if (calendarRef.current) {
+        const calendarApi = calendarRef.current.getApi();
+        calendarApi.gotoDate(defaultStart);
+        
+        // Highlight visual (hanya jika pre-filled)
+        // Kalau HR (bersih), highlightnya opsional biar ga bingung
+        setTimeout(() => {
+          calendarApi.select(defaultStart, defaultEnd);
+        }, 300);
+      }
+      
+      // ✅ 3. LOGIKA TEMPLATE EMAIL (WYSIWYG)
+      let templateHTML = "";
+      const catatanManajer = candidate.interview_notes?.manager_notes_for_candidate || "";
+
+      if (interviewStage === 'manager') {
+        templateHTML = `
+          <p>Halo <strong>${candidate.fullName}</strong>,</p>
+          <p>Anda diundang untuk <strong>Wawancara Teknis</strong>.</p>
+          ${catatanManajer ? `<p><strong>Pesan dari User:</strong><br/>${catatanManajer}</p>` : ''}
+          <p>Siapkan portofolio Anda.</p>
+        `;
+      } else {
+        // Template Final (Polos/Formal)
+        templateHTML = `
+          <p>Halo <strong>${candidate.fullName}</strong>,</p>
+          <p>Selamat! Anda lolos ke tahap <strong>Final Interview & Administrasi</strong>.</p>
+          <p>Mohon menyiapkan dokumen berikut:</p>
+          <ul>
+            <li>KTP Asli</li>
+            <li>Ijazah & Transkrip Asli</li>
+          </ul>
+        `;
+      }
+      
+      setNotes(templateHTML); 
     }
-  }, [initialData, isOpen]);
+  }, [isOpen, candidate, interviewStage]);
 
-  if (!isOpen) {
-    return null;
-  }
+  // --- LOGIKA VISUAL KALENDER ---
+  const calendarEvents = useMemo(() => {
+    if (!existingEvents || !Array.isArray(existingEvents)) return [];
+    return existingEvents.map(event => ({
+        ...event,
+        // Pastikan event lain warnanya abu-abu biar HR tau itu "Taken"
+        backgroundColor: event.extendedProps?.type === 'manual' ? '#EF4444' : '#6B7280',
+        borderColor: event.extendedProps?.type === 'manual' ? '#EF4444' : '#6B7280',
+        // Pastikan judulnya jelas
+        title: event.title || 'Booked'
+    }));
+  }, [existingEvents]);
 
-  // --- 2. LOGIKA MODE BARU ---
-  const isViewMode = isReadOnly; // Mode "Lihat Detail" (Arsip)
-  const isEditMode = !!initialData && !isViewMode; // Mode "Edit" (Aktif)
-  const isAddMode = !initialData && !isViewMode; // Mode "Tambah" (Request)
-
-  // (Handlers: handleInputChange, handleNumberInputChange... tetap sama)
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prevData) => ({ ...prevData, [name]: value }));
-  };
-  const handleNumberInputChange = (e) => {
-    const { name, value } = e.target;
-    const numberValue = parseInt(value, 10) || 0;
-    setFormData((prevData) => ({ ...prevData, [name]: numberValue >= 0 ? numberValue : 0 }));
-  };
-  const handleSpecificRequirementsChange = (e) => {
-    const htmlContent = e.target.value;
-    setSpecificRequirementsHtml(htmlContent);
-    setFormData((prevData) => ({ ...prevData, specificRequirements: htmlContent }));
-  };
-  const handleAnnouncementChange = (e) => {
-    const htmlContent = e.target.value;
-    setAnnouncementHtml(htmlContent);
-    setFormData((prevData) => ({ ...prevData, announcement: htmlContent }));
-  };
-  
   const handleSubmit = (e) => {
     e.preventDefault();
+    if (!startTime || !endTime) return Notiflix.Report.warning("Waktu Kosong", "Pilih slot di kalender.", "OK");
     
-    // --- 3. JANGAN LAKUKAN APA-APA JIKA VIEW ONLY ---
-    if (isViewMode) return; 
-
-    if (isEditMode) {
-      // (Validasi Mode Edit... tetap sama)
-      if (!formData.registrationStartDate || !formData.registrationEndDate) {
-        Notiflix.Report.warning("Tanggal Wajib Diisi", "Mohon isi 'Registration Start Date' dan 'Registration End Date'.", "Okay");
-        return;
-      }
-      const plainText = announcementHtml.replace(/<[^>]+>/g, "").trim();
-      const minWords = 50;
-      const wordCount = plainText.split(/\s+/).filter(word => word.length > 0).length;
-      if (!plainText) {
-         Notiflix.Report.warning("Konten Publik Wajib Diisi", "Mohon isi 'Deskripsi Lowongan'.", "Okay");
-         return;
-      }
-      if (wordCount < minWords) {
-         Notiflix.Report.warning("Konten Publik Kurang", `Deskripsi lowongan harus minimal ${minWords} kata. (Saat ini: ${wordCount} kata)`, "Okay");
-         return;
-      }
-      const dataPublikasi = {
-        registrationStartDate: formData.registrationStartDate,
-        registrationEndDate: formData.registrationEndDate,
-        announcement: formData.announcement,
-      };
-      onSubmit(dataPublikasi);
-      
-    } else { // isAddMode
-      // (Validasi Mode Tambah... tetap sama)
-      const plainRequirements = specificRequirementsHtml.replace(/<[^>]+>/g, "").trim();
-      if (!formData.name || !formData.location || !plainRequirements) {
-        Notiflix.Report.warning("Form Belum Lengkap", "Mohon isi Position Name, Location, dan Specific Requirements.", "Okay");
-        return;
-      }
-      onSubmit(formData);
-    }
+    onSubmit({
+      dateTime: startTime,
+      endTime: endTime,
+      notes_from_hr: notes,
+      preference: meetingType // Kirim preferensi baru
+    });
   };
 
-  const readOnlyInputStyle = "shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline bg-gray-100 cursor-not-allowed";
-  const editableInputStyle = "shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline";
+  if (!isOpen) return null;
 
   return ReactDOM.createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black opacity-50" onClick={onClose}></div>
-      <div className="relative z-50 bg-white rounded-lg shadow-xl w-full max-w-4xl h-5/6 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl mx-auto flex flex-col max-h-[90vh]">
         
-        {/* --- 4. JUDUL MODAL DINAMIS --- */}
-        <div className="flex justify-between items-center p-4 border-b border-gray-200 flex-shrink-0">
-          <h3 className="text-lg font-semibold text-gray-800">
-            {isViewMode ? "Detail Arsip Lowongan" // <-- Judul Baru
-             : isEditMode ? "Lengkapi Data Publikasi" 
-             : "Buat Permintaan Lowongan Baru"}
+        {/* Header */}
+        <div className="flex justify-between items-center p-4 border-b">
+          <h3 className="text-lg font-bold text-gray-800">
+            {interviewStage === 'manager' ? 'Jadwalkan: Wawancara Teknis' : 'Jadwalkan: Wawancara Final (HR)'}
           </h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 text-2xl leading-none" aria-label="Close modal">
-            &times;
-          </button>
+          <button onClick={onClose}><XMarkIcon className="h-6 w-6 text-gray-400 hover:text-red-500"/></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-grow overflow-hidden">
+        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row overflow-hidden h-full">
           
-          <div className="flex-grow overflow-y-auto p-6"> 
+          {/* KIRI: Form Input */}
+          <div className="w-full md:w-1/3 p-6 space-y-4 overflow-y-auto border-r flex-shrink-0 bg-gray-50">
+            <div className="bg-white p-3 rounded border shadow-sm space-y-1">
+               <p className="text-sm font-bold text-gray-900">{candidate?.fullName}</p>
+               <p className="text-xs text-gray-500">{candidate?.qualification}</p>
+            </div>
 
-            {isAddMode ? (
-              /* =========================================== */
-              /* TAMPILAN MODE TAMBAH (2 KOLOM)            */
-              /* =========================================== */
-              <div className="flex flex-grow overflow-hidden -m-6 h-full">
-                {/* (Kolom Kiri: Form Standar) */}
-                <div className="w-1/2 p-6 overflow-y-auto border-r border-gray-200 space-y-4">
-                  <div>
-                    <label htmlFor="name" className="block text-gray-700 text-sm font-bold mb-2">
-                      Position Name <span className="text-red-500">*</span>
-                    </label>
-                    <input type="text" id="name" name="name" value={formData.name} onChange={handleInputChange} className={editableInputStyle} required />
-                  </div>
-                  <div>
-                    <label htmlFor="location" className="block text-gray-700 text-sm font-bold mb-2">
-                      Location <span className="text-red-500">*</span>
-                    </label>
-                    <input type="text" id="location" name="location" value={formData.location} onChange={handleInputChange} className={editableInputStyle} required />
-                  </div>
-                  <div>
-                    <label htmlFor="availableSlots" className="block text-gray-700 text-sm font-bold mb-2">
-                      Available Slots <span className="text-red-500">*</span>
-                    </label>
-                    <input type="number" id="availableSlots" name="availableSlots" value={formData.availableSlots} onChange={handleNumberInputChange} className={editableInputStyle} required min="0" />
-                  </div>
-                </div>
-                {/* (Kolom Kanan: Specific Requirements) */}
-                <div className="w-1/2 p-6 flex flex-col flex-grow overflow-y-auto">
-                  <label htmlFor="specificRequirements" className="block text-gray-700 text-sm font-bold mb-2 flex-shrink-0">
-                    Specific Requirements (Kebutuhan Internal) <span className="text-red-500">*</span>
-                  </label>
-                  <Editor 
-                    id="specificRequirements"
-                    value={specificRequirementsHtml} 
-                    onChange={handleSpecificRequirementsChange} 
-                    containerProps={{ style: { minHeight: "450px", width: "100%" } }} 
-                  />
-                   <p className="text-xs text-gray-500 mt-2">
-                     Wajib diisi.
-                   </p>
-                </div>
-              </div>
-
-            ) : (
-              /* =========================================== */
-              /* TAMPILAN MODE EDIT ATAU VIEW (3 BAGIAN)   */
-              /* =========================================== */
-              <div className="space-y-6"> 
-                
-                {/* --- BAGIAN 1: DATA TANGGAL --- */}
-                <fieldset className="bg-white p-4 rounded-lg border border-blue-300">
-                  <legend className="text-md font-semibold text-blue-800 px-2">
-                    1. Data Publikasi (Tanggal)
-                  </legend>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="registrationStartDate" className="block text-gray-700 text-sm font-bold mb-2">
-                        Registration Start Date {isEditMode && <span className="text-red-500">*</span>}
-                      </label>
-                      <input type="date" id="registrationStartDate" name="registrationStartDate"
-                        value={formData.registrationStartDate}
-                        onChange={handleInputChange}
-                        className={isViewMode ? readOnlyInputStyle : editableInputStyle} // <-- 5. LOGIKA READ-ONLY
-                        readOnly={isViewMode} // <-- 5. LOGIKA READ-ONLY
-                        required={isEditMode} 
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="registrationEndDate" className="block text-gray-700 text-sm font-bold mb-2">
-                        Registration End Date {isEditMode && <span className="text-red-500">*</span>}
-                      </label>
-                      <input type="date" id="registrationEndDate" name="registrationEndDate"
-                        value={formData.registrationEndDate}
-                        onChange={handleInputChange}
-                        className={isViewMode ? readOnlyInputStyle : editableInputStyle} // <-- 5. LOGIKA READ-ONLY
-                        readOnly={isViewMode} // <-- 5. LOGIKA READ-ONLY
-                        required={isEditMode}
-                      />
-                    </div>
-                  </div>
-                </fieldset>
-
-                {/* --- BAGIAN 2: KONTEN PUBLIK --- */}
-                <fieldset className="bg-white p-4 rounded-lg border border-blue-300">
-                  <legend className="text-md font-semibold text-blue-800 px-2">
-                    2. Konten Publik (Announcement) {isEditMode && <span className="text-red-500">*</span>}
-                  </legend>
-                  <label htmlFor="announcement" className="block text-gray-700 text-sm font-bold mb-2">
-                    Deskripsi Lowongan (Akan Tampil di Publik)
-                  </label>
-                  
-                  {/* --- 6. LOGIKA READ-ONLY UNTUK EDITOR --- */}
-                  {isViewMode ? (
-                    <div className="text-sm text-gray-900 mt-1 p-3 border border-gray-300 rounded-md bg-gray-100 min-h-[100px] prose max-w-none">
-                      {parse(announcementHtml || '<i>Tidak ada konten publik</i>')}
-                    </div>
-                  ) : (
-                    <>
-                      <Editor
-                        id="announcement"
-                        value={announcementHtml}
-                        onChange={handleAnnouncementChange}
-                        containerProps={{ style: { minHeight: "200px", width: "100%" } }}
-                      />
-                      <p className="text-xs text-gray-500 mt-2">
-                        Wajib diisi, minimal 50 kata.
-                      </p>
-                    </>
-                  )}
-                  
-                </fieldset>
-
-                {/* --- BAGIAN 3: DATA PERMINTAAN (Selalu Read-Only) --- */}
-                <fieldset className="bg-gray-50 p-4 rounded-lg border border-gray-300">
-                  <legend className="text-md font-semibold text-gray-800 px-2 flex items-center">
-                    3. Referensi Permintaan
-                    <LockClosedIcon className="h-4 w-4 text-gray-500 ml-2" title="Read-Only" />
-                  </legend>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                    <div>
-                      <label className="block text-gray-700 text-sm font-bold mb-2">Position Name</label>
-                      <input type="text" value={formData.name} className={readOnlyInputStyle} readOnly />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 text-sm font-bold mb-2">Location</label>
-                      <input type="text" value={formData.location} className={readOnlyInputStyle} readOnly />
-                    </div>
-                    <div>
-                      <label className="block text-gray-700 text-sm font-bold mb-2">Available Slots</label>
-                      <input type="number" value={formData.availableSlots} className={readOnlyInputStyle} readOnly />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-gray-700 text-sm font-bold mb-2">Specific Requirements (Internal)</label>
-                    <div className="text-sm text-gray-900 mt-1 p-3 border border-gray-300 rounded-md bg-gray-100 min-h-[100px] prose max-w-none">
-                      {parse(specificRequirementsHtml || '<i>Tidak ada detail</i>')}
-                    </div>
-                  </div>
-                </fieldset>
-              </div> 
-            )}
-            
-          </div>
-          
-          {/* --- 7. SEMBUNYIKAN TOMBOL SUBMIT JIKA READ-ONLY --- */}
-          <div className="p-4 border-t border-gray-200 flex justify-end space-x-4 flex-shrink-0">
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-block align-baseline font-bold text-sm text-gray-700 hover:text-gray-900"
-            >
-              {isViewMode ? "Tutup" : "Batal"} {/* Ganti teks tombol */}
-            </button>
-            
-            {/* Hanya tampilkan tombol submit jika TIDAK read-only */}
-            {!isViewMode && (
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            {/* Dropdown Tipe Meeting */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Pertemuan</label>
+              <select 
+                value={meetingType} 
+                onChange={(e)=>setMeetingType(e.target.value)} 
+                className="w-full p-2 border rounded bg-white focus:ring-2 focus:ring-blue-500"
               >
-                {isEditMode ? "Update Data Publikasi" : "Buat Permintaan (Draft)"}
-              </button>
-            )}
+                 <option value="Online">📹 Online (Google Meet)</option>
+                 <option value="Offline">📍 Offline (Kantor)</option>
+              </select>
+            </div>
+
+            {/* Input Waktu Read-Only (Hasil Klik Kalender) */}
+            <div>
+               <label className="block text-sm font-medium text-gray-700 mb-1">Waktu Terpilih</label>
+               <input 
+                 type="text" 
+                 readOnly 
+                 value={startTime ? `${moment(startTime).format("DD MMM, HH:mm")} - ${moment(endTime).format("HH:mm")}` : "Pilih di Kalender ->"}
+                 className="w-full p-2 border rounded bg-gray-100 text-gray-700 font-bold"
+               />
+            </div>
+
+            {/* WYSIWYG */}
+            <div className="flex-grow">
+               <label className="block text-sm font-medium text-gray-700 mb-1">Isi Email</label>
+               <Editor value={notes} onChange={(e)=>setNotes(e.target.value)} containerProps={{ style: { height: '200px' } }} />
+            </div>
           </div>
 
+          {/* KANAN: Kalender Besar */}
+          <div className="w-full md:w-2/3 p-4 flex-grow overflow-y-auto">
+             <FullCalendar 
+                ref={calendarRef}
+                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
+                initialView="timeGridWeek"
+                locale={idLocale}
+                events={calendarEvents}
+                
+                // 🔥 FITUR KUNCI: Gak bisa nabrak jadwal lain
+                selectOverlap={false} 
+                
+                // Handler
+                selectable={true}
+                select={(info) => { setStartTime(info.start); setEndTime(info.end); }}
+                
+                // Tampilan
+                allDaySlot={false}
+                slotMinTime="08:00:00"
+                slotMaxTime="18:00:00"
+                height="100%"
+                headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridWeek,timeGridDay' }}
+             />
+          </div>
         </form>
+
+        {/* Footer */}
+        <div className="p-4 border-t bg-white flex justify-end gap-3">
+           <button type="button" onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-50">Batal</button>
+           <button type="button" onClick={handleSubmit} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow">Simpan Jadwal</button>
+        </div>
       </div>
     </div>,
     document.body
   );
-};
+}
 
-export default JobPositionFormModal;
+export default ScheduleInterviewModal;

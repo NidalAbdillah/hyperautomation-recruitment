@@ -15,7 +15,7 @@ const db = {
   User,
   JobPosition,
   CvApplication,
-  Schedule, // <-- 2. TAMBAHKAN INI
+  Schedule,
 };
 
 // --- Inisialisasi Asosiasi (Relasi) ---

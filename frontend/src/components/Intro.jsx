@@ -34,30 +34,30 @@ const Intro = () => {
             data-aos="zoom-in"
             data-aos-delay="500"
           >
-            <h3 className="text-3xl text-red-700 font-bold">
-              Infrastructure Service Research Laboratory
+            <h3 className="text-3xl text-blue-900 font-bold">
+              PT Tech XYZ
             </h3>
             <div>
               <p className="my-4 text-0.7xl text-gray-600 font-semibold text-justify">
-                Infrastructure Service Research Laboratory (ISR Lab) Telkom
-                berfokus pada riset dan analisis mendalam terhadap layanan
-                infrastruktur TI. Kami menyusun studi dan laporan komprehensif
-                untuk mendorong inovasi dan pengambilan keputusan strategis di
-                bidang infrastruktur digital.
+                PT Tech XYZ adalah perusahaan teknologi end-to-end yang
+                mengembangkan solusi perangkat lunak dan infrastruktur digital
+                untuk membantu organisasi tumbuh lebih cepat. Kami menggabungkan
+                riset, rekayasa produk, dan layanan konsultasi agar klien dapat
+                mengadopsi teknologi terbaru secara aman dan terukur.
               </p>
             </div>
             <div>
               <p className="my-3 text-0.7xl text-gray-600 font-semibold text-justify">
-                Aktivitas inti kami mencakup pengelolaan dan pemeliharaan sistem
-                jaringan, administrasi dan pemantauan kinerja server,
-                implementasi solusi cloud computing canggih, serta mengembangkan
-                otomatisasi proses untuk meningkatkan efisiensi dan keandalan
-                operasional infrastruktur Telkom.
+                Fokus utama kami mencakup pembangunan aplikasi berbasis cloud,
+                orkestrasi data real-time, otomatisasi proses bisnis, serta
+                layanan managed service yang memastikan performa sistem tetap
+                optimal. Tim multidisiplin PT Tech XYZ siap bermitra dengan Anda
+                untuk memetakan kebutuhan dan menghadirkan inovasi bernilai nyata.
               </p>
             </div>
             <Link
               to="/contact"
-              className="text-white bg-red-700 hover:bg-red-600 inline-flex items-center justify-center w-full px-6 py-2 my-4 text-lg shadow-xl rounded-2xl sm:w-auto sm:mb-0 group"
+              className="text-white bg-blue-900 hover:bg-blue-800 inline-flex items-center justify-center w-full px-6 py-2 my-4 text-lg shadow-xl rounded-2xl sm:w-auto sm:mb-0 group"
             >
               Kontak Kami
               <svg

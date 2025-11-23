@@ -1,5 +1,5 @@
 // src/services/application.service.ts
-import { CvApplication, JobPosition, User } from "../models";
+import { CvApplication, JobPosition, User, Schedule } from "../models";
 import minioService from "./minio.service";
 import { sequelize } from "../config/database";
 import { Op, Transaction } from "sequelize";
@@ -45,6 +45,8 @@ class ApplicationService implements IApplicationService {
       "INTERVIEW_QUEUED",
       "INTERVIEW_SCHEDULED",
       "PENDING_FINAL_DECISION",
+      "FINAL_INTERVIEW_QUEUED",
+      "FINAL_INTERVIEW_SCHEDULED",
       "HIRED",
       "NOT_HIRED",
       "ONBOARDING"
@@ -54,79 +56,130 @@ class ApplicationService implements IApplicationService {
 
 // src/services/application.service.ts
 
-  public async triggerScheduleWorkflow(
-    applicationId: number,
-    scheduleData: any, // Data dari frontend (dateTime, endTime, notes_from_hr)
-    hrUser: any // Data user HR yang sedang login (dari req.user)
-  ): Promise<CvApplication> {
-    
-    // 1. Dapatkan URL Webhook dari .env
-    const n8nWebhookUrl = process.env.N8N_SCHEDULE_WEBHOOK_URL;
-    if (!n8nWebhookUrl) {
-      console.error("[Service] N8N_SCHEDULE_WEBHOOK_URL not configured.");
-      throw createError("Schedule service is not configured.", 500);
-    }
+  // src/services/application.service.ts
 
-    // 2. Ambil semua data aplikasi (termasuk Manajer yang me-request)
-    const application = await CvApplication.findByPk(applicationId, {
-      include: [
-        {
-          model: JobPosition,
-          as: "appliedPosition", // Sesuai dengan relasi di models/index.ts
-          include: [{ model: User, as: "requestor" }], // Ambil data Manajer
-        },
-      ],
-    });
+// src/services/application.service.ts
 
-    if (!application) {
-      throw createError("Application not found.", 404);
-    }
-
-    // 3. Siapkan payload lengkap untuk dikirim ke N8N
-    const payload = {
-      applicationId: application.id,
-      candidateName: application.fullName,
-      candidateEmail: application.email,
-      
-      // --- KOREKSI ERROR 1 DI SINI ---
-      // Kita gunakan (application as any) untuk mengakses relasi 'appliedPosition'
-      managerName: (application as any).appliedPosition?.requestor?.name || "Manager",
-      managerEmail: (application as any).appliedPosition?.requestor?.email || null,
-      
-      // --- KOREKSI ERROR 2 DI SINI ---
-      // Kita gunakan (application.interview_notes as any) untuk mengakses 'preference'
-      preference: (application.interview_notes as any)?.preference || "Online",
-      // --- BATAS KOREKSI ---
-
-      dateTime: scheduleData.dateTime,
-      endTime: scheduleData.endTime,
-      notes_from_hr: scheduleData.notes_from_hr,
-      userName: hrUser.email, // Nama Staff HR yang menjadwalkan
-    };
-    
-    // 4. Panggil N8N (Fire-and-Forget, tidak perlu ditunggu)
-    axios.post(n8nWebhookUrl, payload)
-      .then(() => console.log(`[N8N] Schedule webhook triggered for app ID: ${applicationId}`))
-      .catch((err) => console.error(`[N8N] CRITICAL: Failed to trigger schedule webhook for ID ${applicationId}:`, err.message));
-      
-    // 5. Langsung update database (agar frontend responsif)
-    application.status = "INTERVIEW_SCHEDULED";
-    application.interview_notes = {
-      ...(application.interview_notes as any || {}), // <-- Tambahkan (as any) di sini juga
-      scheduled_time: scheduleData.dateTime,
-      scheduled_end_time: scheduleData.endTime,
-      scheduled_by: hrUser.email,
-      manager_notes_for_candidate: scheduleData.notes_from_hr,
-    };
-
-    // Simpan perubahan ke database
-    await application.save({
-      fields: ["status", "interview_notes"],
-    });
-    
-    console.log(`[Service] Application ${applicationId} status updated to INTERVIEW_SCHEDULED.`);
-    return application;
+public async triggerScheduleWorkflow(
+  applicationId: number,
+  scheduleData: any,
+  hrUser: any
+): Promise<CvApplication> {
+  
+  // 1. Validasi Webhook URL
+  const n8nWebhookUrl = process.env.N8N_SCHEDULE_WEBHOOK_URL;
+  if (!n8nWebhookUrl) {
+    console.error("[Service] N8N_SCHEDULE_WEBHOOK_URL not configured.");
+    throw createError("Schedule service is not configured.", 500);
   }
+
+  // 2. Ambil Data Aplikasi
+  const application = await CvApplication.findByPk(applicationId, {
+    include: [
+      {
+        model: JobPosition,
+        as: "appliedPosition",
+        include: [{ model: User, as: "requestor" }],
+      },
+    ],
+  });
+
+  if (!application) {
+    throw createError("Application not found.", 404);
+  }
+
+  // --- 🔥 PERBAIKAN UTAMA DI SINI ---
+  console.log("[Service Debug] Schedule Data Received:", JSON.stringify(scheduleData));
+
+  // HAPUS default value! Kita wajibkan frontend kirim tipe.
+  const interviewType = scheduleData.type; 
+
+  if (!interviewType) {
+    throw createError("Interview Type (manager/final_hr) is required.", 400);
+  }
+  
+  // Tentukan Status Baru dengan TEGAS
+  let newStatus: string;
+  
+  if (interviewType === 'manager') {
+    newStatus = 'INTERVIEW_SCHEDULED';
+  } else if (interviewType === 'final_hr') {
+    newStatus = 'FINAL_INTERVIEW_SCHEDULED'; // ✅ Pastikan string ini sama persis dengan filter Frontend
+  } else if (interviewType === 'onboarding') {
+    newStatus = 'ONBOARDING';
+  } else {
+    // Fallback hanya jika ada custom status, JANGAN default ke manager
+    newStatus = scheduleData.newStatus || 'INTERVIEW_SCHEDULED';
+  }
+  
+  console.log(`[Service] Scheduling Type: ${interviewType} -> New Status: ${newStatus}`);
+
+  // 3. Siapkan Payload untuk N8N
+  let payload: any = {
+    applicationId: application.id,
+    candidateName: application.fullName,
+    candidateEmail: application.email,
+    dateTime: scheduleData.dateTime,
+    endTime: scheduleData.endTime,
+    notes_from_hr: scheduleData.notes_from_hr,
+    userName: hrUser.email,
+    interviewType: interviewType,
+    positionName: application.qualification,
+    newStatus: newStatus
+  };
+
+  // 4. Tentukan Interviewer & Preference
+  if (interviewType === 'manager') {
+    const manager = (application as any).appliedPosition?.requestor;
+    payload.interviewerName = manager?.name || "Manager";
+    payload.interviewerEmail = manager?.email || null;
+    payload.preference = (application.interview_notes as any)?.preference || scheduleData.preference || "Online";
+    
+  } else if (interviewType === 'final_hr') {
+    // Cari Kepala HR (Opsional: bisa hardcode email atau cari role)
+    const headHrUser = await User.findOne({ where: { role: 'head_hr' } });
+    
+    payload.interviewerName = headHrUser?.name || "Kepala HR"; 
+    payload.interviewerEmail = headHrUser?.email || null;
+    // Ambil preference dari form modal final
+    payload.preference = scheduleData.preference || "Online";
+    
+  } else if (interviewType === 'onboarding') {
+    payload.interviewerName = hrUser.name || "HR Team"; 
+    payload.interviewerEmail = hrUser.email; // Email Staff HR
+    
+    // Default Preference biasanya Offline (ke kantor), tapi ambil dari input frontend
+    payload.preference = scheduleData.preference || "Offline";
+  }
+  
+  // 5. Trigger N8N Webhook
+  axios.post(n8nWebhookUrl, payload)
+    .then(() => console.log(`[N8N] ${interviewType} webhook triggered successfully.`))
+    .catch((err) => console.error(`[N8N] Failed:`, err.message));
+    
+  // 6. Update Database
+  application.status = newStatus; // ✅ Status sudah benar di sini
+
+  // Simpan notes jadwal
+  application.interview_notes = {
+    ...(application.interview_notes as any || {}),
+    scheduled_by: hrUser.email,
+    scheduled_at: new Date(),
+    interview_type: interviewType,
+    preference: payload.preference,
+    
+    // Data spesifik jadwal (penting untuk tabel)
+    scheduled_time: scheduleData.dateTime, 
+    schedule_link: scheduleData.scheduleLink || null, // Jika N8N mengembalikan link sync (opsional)
+  };
+
+  await application.save({
+    fields: ["status", "interview_notes"],
+  });
+  
+  console.log(`[Service] ✅ Application ${applicationId} updated to ${newStatus}.`);
+  return application;
+}
 
   public async createApplication(
     applicationData: ApplicationCreationDTO,
@@ -195,18 +248,18 @@ class ApplicationService implements IApplicationService {
       );
 
       // (Email confirmation ... sisa kode Anda sudah benar)
-      emailService
-        .sendApplicationConfirmation(
-          newApplication.email,
-          newApplication.fullName,
-          newApplication.qualification
-        )
-        .catch((emailError: any) => {
-          console.error(
-            `[Email Confirmation] FAILED to send:`,
-            emailError.message
-          );
-        });
+      // emailService
+      //   .sendApplicationConfirmation(
+      //     newApplication.email,
+      //     newApplication.fullName,
+      //     newApplication.qualification
+      //   )
+      //   .catch((emailError: any) => {
+      //     console.error(
+      //       `[Email Confirmation] FAILED to send:`,
+      //       emailError.message
+      //     );
+      //   });
 
       // (N8N Webhook trigger ... sisa kode Anda sudah benar)
       const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;
@@ -286,30 +339,45 @@ class ApplicationService implements IApplicationService {
     return application;
   }
 
-  public async deleteApplication(
+ public async deleteApplication(
     applicationId: number
   ): Promise<{ success: true; message: string }> {
     if (isNaN(applicationId))
       throw createError("Invalid application ID.", 400);
-    console.log(`Service: Deleting application ID: ${applicationId}`);
-    const application = await CvApplication.findByPk(applicationId);
-    if (!application)
-      throw createError(`Application ID ${applicationId} not found.`, 404);
-    if (application.cvFileObjectKey) {
-      try {
-        await minioService.deleteCvFile(application.cvFileObjectKey);
-      } catch (minioError: any) {
-        console.error(
-          `Service Error: Failed deleting Minio file ${application.cvFileObjectKey}:`,
-          minioError
-        );
-      }
-    }
+    console.log(`Service: Deleting application ID: ${applicationId} and related schedule...`);
+    const t: Transaction = await sequelize.transaction();
+
     try {
-      await application.destroy();
+      const application = await CvApplication.findByPk(applicationId, { transaction: t });
+      if (!application) {
+        await t.rollback();
+        throw createError(`Application ID ${applicationId} not found.`, 404);
+      }
+      if (application.cvFileObjectKey) {
+        try {
+          await minioService.deleteCvFile(application.cvFileObjectKey);
+        } catch (minioError: any) {
+          console.error(
+            `Service Error: Failed deleting Minio file ${application.cvFileObjectKey}:`,
+            minioError
+          );
+        }
+      }
+      await Schedule.destroy({
+        where: { applicationId: applicationId },
+        transaction: t
+      });
+      console.log(`Service: Deleted related schedule for application ID ${applicationId}.`);
+
+      await application.destroy({ transaction: t });
       console.log(`Service: Deleted application ID ${applicationId} from DB.`);
-      return { success: true, message: "Application deleted successfully." };
+
+      await t.commit();
+      
+      return { success: true, message: "Application and related schedule deleted successfully." };
+
     } catch (dbError: any) {
+      await t.rollback();
       console.error(
         `Service Error: Deleting application ID ${applicationId} from DB:`,
         dbError
@@ -358,7 +426,7 @@ class ApplicationService implements IApplicationService {
     }
   }
 
-  public async updateApplicationStatus(
+public async updateApplicationStatus(
     applicationId: number,
     updateData: ApplicationStatusUpdateDTO
   ): Promise<CvApplication> {
@@ -368,7 +436,7 @@ class ApplicationService implements IApplicationService {
     const application = await CvApplication.findByPk(applicationId);
     if (!application)
       throw createError(`Application ID ${applicationId} not found.`, 404);
-
+    
     const fieldsToUpdate: ("status" | "interview_notes")[] = [];
     
     // Update Status
@@ -381,12 +449,38 @@ class ApplicationService implements IApplicationService {
       console.log(`Service: Updating status to ${updateData.status} for ID ${applicationId}.`);
     }
 
-    // ✅ FIX: Cek eksplisit null/undefined, bukan truthy
+    // Update Feedback/Notes
     if (updateData.interview_notes !== undefined && updateData.interview_notes !== null) {
-      application.interview_notes = {
-        ...(application.interview_notes || {}),
-        ...updateData.interview_notes,
-      };
+      
+      // ✅ FIX: Clear link Manager saat pindah ke Final
+      const currentNotes = application.interview_notes as any || {};
+      
+      // Jika status berubah ke PENDING_FINAL_DECISION, hapus data jadwal Manager
+      if (updateData.status === 'PENDING_FINAL_DECISION') {
+        console.log(`[Service] ✅ Clearing Manager schedule data for app ${applicationId}`);
+        
+        // Hapus field-field yang terkait jadwal Manager (tapi tetap simpan feedback-nya)
+        delete currentNotes.scheduled_time;
+        delete currentNotes.schedule_link;
+        delete currentNotes.manager_proposed_start;
+        delete currentNotes.manager_proposed_end;
+        delete currentNotes.scheduled_by;
+        delete currentNotes.scheduled_at;
+        
+        // Merge dengan data baru dari Manager (feedback)
+        application.interview_notes = {
+          ...currentNotes,
+          ...updateData.interview_notes,
+        };
+        
+      } else {
+        // Update biasa (tidak ada clear)
+        application.interview_notes = {
+          ...currentNotes,
+          ...updateData.interview_notes,
+        };
+      }
+      
       fieldsToUpdate.push("interview_notes");
       console.log(`Service: Updating interview_notes for ID ${applicationId}.`);
     }
@@ -399,10 +493,11 @@ class ApplicationService implements IApplicationService {
     try {
       await application.save({ fields: fieldsToUpdate });
       
-      console.log(`Service: Fields [${fieldsToUpdate.join(", ")}] updated for ID ${applicationId}.`);
+      console.log(`Service: ✅ Fields [${fieldsToUpdate.join(", ")}] updated for ID ${applicationId}.`);
       
       await application.reload({ attributes: this.standardAttributes });
       return application;
+
     } catch (error: any) {
       console.error(`Service Error: Updating status/notes for ID ${applicationId}:`, error);
       throw createError(`Failed to update application: ${error.message}`, 500);
