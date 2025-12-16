@@ -57,7 +57,7 @@ function ProtectedRoute({ children }) {
 
 // Komponen utama aplikasi React
 function App() {
-  useDocTitle("ISR LAB | Infrastructure Research Lab");
+  useDocTitle("PT Tech XYZ | Company");
 
   useEffect(() => {
     // ... (Logika AOS Anda sudah benar) ...
