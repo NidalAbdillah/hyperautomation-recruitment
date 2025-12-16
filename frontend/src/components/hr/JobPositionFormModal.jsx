@@ -1,230 +1,216 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import ReactDOM from 'react-dom';
-import { XMarkIcon } from '@heroicons/react/24/outline';
-import moment from 'moment';
-import Notiflix from 'notiflix';
-import Editor from 'react-simple-wysiwyg'; 
+import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
+import { XMarkIcon } from "@heroicons/react/24/outline";
+import Editor from "react-simple-wysiwyg";
 
-// FullCalendar Imports
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import multiMonthPlugin from '@fullcalendar/multimonth';
-import idLocale from '@fullcalendar/core/locales/id';
+const JobPositionFormModal = ({ isOpen, onClose, onSubmit, initialData }) => {
+  // 1. State Tunggal untuk Semua Field
+  const [formData, setFormData] = useState({
+    name: "",
+    location: "",
+    availableSlots: 1,
+    registrationStartDate: null,
+    registrationEndDate: null,
+    specificRequirements: "", // Internal (untuk AI)
+    announcement: "", // Public (untuk Pelamar)
+  });
 
-function ScheduleInterviewModal({ 
-  isOpen, 
-  onClose, 
-  onSubmit, 
-  candidate, 
-  existingEvents = [], // 🔥 INI HARUS BERISI SEMUA JADWAL DARI DB
-  interviewStage = "manager" 
-}) {
-  
-  const [startTime, setStartTime] = useState(null);
-  const [endTime, setEndTime] = useState(null);
-  const [notes, setNotes] = useState("");
-  const [meetingType, setMeetingType] = useState('Online');
-  const calendarRef = useRef(null);
-
-  // --- LOGIKA UTAMA: PRE-FILL vs CLEAN SLATE ---
+  // 2. Reset / Isi Form saat Modal Dibuka
   useEffect(() => {
-    if (isOpen && candidate) {
-      
-      let defaultStart = null;
-      let defaultEnd = null;
-      let isPreFilled = false;
-
-      // ✅ 1. SET DEFAULT TIPE MEETING
-      // Kalau tahap Manager: Ikut preferensi awal kandidat
-      // Kalau tahap Final: Default Online (tapi bisa diubah)
-      const defaultPref = candidate.interview_notes?.preference || 'Online';
-      setMeetingType(defaultPref);
-
-      // ✅ 2. LOGIKA TANGGAL (INTI PERMINTAAN ANDA)
-      
-      // KONDISI A: TAHAP MANAGER (Ikuti Request Manajer)
-      if (interviewStage === 'manager') {
-        const proposedStart = candidate.interview_notes?.manager_proposed_start;
-        const proposedEnd = candidate.interview_notes?.manager_proposed_end;
-
-        if (proposedStart && proposedEnd) {
-          defaultStart = new Date(proposedStart);
-          defaultEnd = new Date(proposedEnd);
-          isPreFilled = true; // Tandai sudah diisi
-          console.log("✅ [Manager Mode] Mengisi form sesuai request Manajer");
-        }
-      } 
-      
-      // KONDISI B: TAHAP HR / FINAL (Bersih / Reset)
-      // Jika tahap Final, variabel isPreFilled pasti false (karena blok if di atas di-skip)
-      if (!isPreFilled) {
-         // Default: 1 jam dari sekarang (Hanya placeholder)
-         // Staff HR harus klik tanggal sendiri nanti
-         defaultStart = moment().add(1, 'hour').minute(0).second(0).toDate();
-         defaultEnd = moment(defaultStart).add(1, 'hour').toDate();
-         console.log(`🧹 [${interviewStage} Mode] Form di-reset bersih. Silakan pilih slot manual.`);
-      }
-      
-      // Set State
-      setStartTime(defaultStart);
-      setEndTime(defaultEnd);
-      
-      // Pindahkan view kalender ke tanggal tersebut
-      if (calendarRef.current) {
-        const calendarApi = calendarRef.current.getApi();
-        calendarApi.gotoDate(defaultStart);
-        
-        // Highlight visual (hanya jika pre-filled)
-        // Kalau HR (bersih), highlightnya opsional biar ga bingung
-        setTimeout(() => {
-          calendarApi.select(defaultStart, defaultEnd);
-        }, 300);
-      }
-      
-      // ✅ 3. LOGIKA TEMPLATE EMAIL (WYSIWYG)
-      let templateHTML = "";
-      const catatanManajer = candidate.interview_notes?.manager_notes_for_candidate || "";
-
-      if (interviewStage === 'manager') {
-        templateHTML = `
-          <p>Halo <strong>${candidate.fullName}</strong>,</p>
-          <p>Anda diundang untuk <strong>Wawancara Teknis</strong>.</p>
-          ${catatanManajer ? `<p><strong>Pesan dari User:</strong><br/>${catatanManajer}</p>` : ''}
-          <p>Siapkan portofolio Anda.</p>
-        `;
+    if (isOpen) {
+      if (initialData) {
+        // Mode Edit: Isi data
+        setFormData({
+          name: initialData.name || "",
+          location: initialData.location || "",
+          availableSlots: initialData.availableSlots || 1,
+          registrationStartDate: initialData.registrationStartDate ? new Date(initialData.registrationStartDate) : null,
+          registrationEndDate: initialData.registrationEndDate ? new Date(initialData.registrationEndDate) : null,
+          specificRequirements: initialData.specificRequirements || "",
+          announcement: initialData.announcement || "",
+        });
       } else {
-        // Template Final (Polos/Formal)
-        templateHTML = `
-          <p>Halo <strong>${candidate.fullName}</strong>,</p>
-          <p>Selamat! Anda lolos ke tahap <strong>Final Interview & Administrasi</strong>.</p>
-          <p>Mohon menyiapkan dokumen berikut:</p>
-          <ul>
-            <li>KTP Asli</li>
-            <li>Ijazah & Transkrip Asli</li>
-          </ul>
-        `;
+        // Mode Tambah: Reset
+        setFormData({
+          name: "",
+          location: "",
+          availableSlots: 1,
+          registrationStartDate: null,
+          registrationEndDate: null,
+          specificRequirements: "",
+          announcement: "",
+        });
       }
-      
-      setNotes(templateHTML); 
     }
-  }, [isOpen, candidate, interviewStage]);
+  }, [isOpen, initialData]);
 
-  // --- LOGIKA VISUAL KALENDER ---
-  const calendarEvents = useMemo(() => {
-    if (!existingEvents || !Array.isArray(existingEvents)) return [];
-    return existingEvents.map(event => ({
-        ...event,
-        // Pastikan event lain warnanya abu-abu biar HR tau itu "Taken"
-        backgroundColor: event.extendedProps?.type === 'manual' ? '#EF4444' : '#6B7280',
-        borderColor: event.extendedProps?.type === 'manual' ? '#EF4444' : '#6B7280',
-        // Pastikan judulnya jelas
-        title: event.title || 'Booked'
-    }));
-  }, [existingEvents]);
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleDateChange = (date, field) => {
+    setFormData(prev => ({ ...prev, [field]: date }));
+  };
+
+  const handleEditorChange = (e) => {
+    // WYSIWYG editor mengembalikan event dengan target.value sebagai HTML
+    setFormData(prev => ({ ...prev, specificRequirements: e.target.value }));
+  };
+  
+  const handleAnnouncementChange = (e) => {
+    setFormData(prev => ({ ...prev, announcement: e.target.value }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!startTime || !endTime) return Notiflix.Report.warning("Waktu Kosong", "Pilih slot di kalender.", "OK");
-    
-    onSubmit({
-      dateTime: startTime,
-      endTime: endTime,
-      notes_from_hr: notes,
-      preference: meetingType // Kirim preferensi baru
-    });
+    // Validasi sederhana
+    if (!formData.name || !formData.location) {
+      alert("Nama Posisi dan Lokasi wajib diisi.");
+      return;
+    }
+    onSubmit(formData);
   };
 
   if (!isOpen) return null;
 
   return ReactDOM.createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-6xl mx-auto flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         
         {/* Header */}
-        <div className="flex justify-between items-center p-4 border-b">
-          <h3 className="text-lg font-bold text-gray-800">
-            {interviewStage === 'manager' ? 'Jadwalkan: Wawancara Teknis' : 'Jadwalkan: Wawancara Final (HR)'}
+        <div className="flex justify-between items-center p-5 border-b">
+          <h3 className="text-xl font-bold text-gray-800">
+            {initialData ? "Edit Posisi Lowongan" : "Buat Lowongan Baru"}
           </h3>
-          <button onClick={onClose}><XMarkIcon className="h-6 w-6 text-gray-400 hover:text-red-500"/></button>
+          <button onClick={onClose} className="text-gray-400 hover:text-red-500">
+            <XMarkIcon className="h-6 w-6" />
+          </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col md:flex-row overflow-hidden h-full">
-          
-          {/* KIRI: Form Input */}
-          <div className="w-full md:w-1/3 p-6 space-y-4 overflow-y-auto border-r flex-shrink-0 bg-gray-50">
-            <div className="bg-white p-3 rounded border shadow-sm space-y-1">
-               <p className="text-sm font-bold text-gray-900">{candidate?.fullName}</p>
-               <p className="text-xs text-gray-500">{candidate?.qualification}</p>
+        {/* Body (Scrollable) */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <form id="jobForm" onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* Baris 1: Info Dasar */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nama Posisi</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  placeholder="e.g. Senior Backend Engineer"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Lokasi</label>
+                <input
+                  type="text"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  placeholder="e.g. Jakarta / Remote"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                  required
+                />
+              </div>
             </div>
 
-            {/* Dropdown Tipe Meeting */}
+            {/* Baris 2: Kuota & Tanggal */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50 p-4 rounded-lg border">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Kuota (Slot)</label>
+                <input
+                  type="number"
+                  name="availableSlots"
+                  min="1"
+                  value={formData.availableSlots}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Buka</label>
+                <DatePicker
+                  selected={formData.registrationStartDate}
+                  onChange={(date) => handleDateChange(date, "registrationStartDate")}
+                  dateFormat="dd/MM/yyyy"
+                  placeholderText="Pilih Tanggal"
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tanggal Tutup</label>
+                <DatePicker
+                  selected={formData.registrationEndDate}
+                  onChange={(date) => handleDateChange(date, "registrationEndDate")}
+                  dateFormat="dd/MM/yyyy"
+                  placeholderText="Pilih Tanggal"
+                  minDate={formData.registrationStartDate}
+                  className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Baris 3: Requirements (Internal) */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipe Pertemuan</label>
-              <select 
-                value={meetingType} 
-                onChange={(e)=>setMeetingType(e.target.value)} 
-                className="w-full p-2 border rounded bg-white focus:ring-2 focus:ring-blue-500"
-              >
-                 <option value="Online">📹 Online (Google Meet)</option>
-                 <option value="Offline">📍 Offline (Kantor)</option>
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Kebutuhan Spesifik (Internal - Untuk AI Scoring)
+              </label>
+              <div className="border rounded-lg overflow-hidden">
+                <Editor
+                  value={formData.specificRequirements}
+                  onChange={handleEditorChange}
+                  containerProps={{ style: { height: '200px' } }}
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">* Tuliskan skill teknis & kualifikasi detail di sini.</p>
             </div>
 
-            {/* Input Waktu Read-Only (Hasil Klik Kalender) */}
+            {/* Baris 4: Announcement (Public) */}
             <div>
-               <label className="block text-sm font-medium text-gray-700 mb-1">Waktu Terpilih</label>
-               <input 
-                 type="text" 
-                 readOnly 
-                 value={startTime ? `${moment(startTime).format("DD MMM, HH:mm")} - ${moment(endTime).format("HH:mm")}` : "Pilih di Kalender ->"}
-                 className="w-full p-2 border rounded bg-gray-100 text-gray-700 font-bold"
-               />
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pengumuman Publik (Akan tampil di web pelamar)
+              </label>
+              <div className="border rounded-lg overflow-hidden">
+                <Editor
+                  value={formData.announcement}
+                  onChange={handleAnnouncementChange}
+                  containerProps={{ style: { height: '150px' } }}
+                />
+              </div>
             </div>
 
-            {/* WYSIWYG */}
-            <div className="flex-grow">
-               <label className="block text-sm font-medium text-gray-700 mb-1">Isi Email</label>
-               <Editor value={notes} onChange={(e)=>setNotes(e.target.value)} containerProps={{ style: { height: '200px' } }} />
-            </div>
-          </div>
-
-          {/* KANAN: Kalender Besar */}
-          <div className="w-full md:w-2/3 p-4 flex-grow overflow-y-auto">
-             <FullCalendar 
-                ref={calendarRef}
-                plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin]}
-                initialView="timeGridWeek"
-                locale={idLocale}
-                events={calendarEvents}
-                
-                // 🔥 FITUR KUNCI: Gak bisa nabrak jadwal lain
-                selectOverlap={false} 
-                
-                // Handler
-                selectable={true}
-                select={(info) => { setStartTime(info.start); setEndTime(info.end); }}
-                
-                // Tampilan
-                allDaySlot={false}
-                slotMinTime="08:00:00"
-                slotMaxTime="18:00:00"
-                height="100%"
-                headerToolbar={{ left: 'prev,next today', center: 'title', right: 'timeGridWeek,timeGridDay' }}
-             />
-          </div>
-        </form>
+          </form>
+        </div>
 
         {/* Footer */}
-        <div className="p-4 border-t bg-white flex justify-end gap-3">
-           <button type="button" onClick={onClose} className="px-4 py-2 border rounded hover:bg-gray-50">Batal</button>
-           <button type="button" onClick={handleSubmit} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 shadow">Simpan Jadwal</button>
+        <div className="p-5 border-t bg-gray-50 flex justify-end gap-3 rounded-b-lg">
+          <button
+            onClick={onClose}
+            className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-medium hover:bg-white transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            form="jobForm"
+            className="px-5 py-2.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 shadow-md transition-colors"
+          >
+            {initialData ? "Simpan Perubahan" : "Buat Posisi"}
+          </button>
         </div>
+
       </div>
     </div>,
     document.body
   );
-}
+};
 
-export default ScheduleInterviewModal;
+export default JobPositionFormModal;

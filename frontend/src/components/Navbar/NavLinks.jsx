@@ -42,7 +42,7 @@ const NavLinks = () => {
       <HashLink
         smooth
         to="/applycv"
-        className="inline-flex items-center justify-center w-auto px-4 py-2 rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 font-semibold"
+        className="inline-flex items-center justify-center w-auto px-4 py-2 rounded-lg shadow-sm text-white bg-blue-900 hover:bg-blue-700 font-semibold"
       >
         Apply Cv
       </HashLink>

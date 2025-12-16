@@ -7,26 +7,19 @@ const Cta = () => {
       <div className="mx-8 w-full h-96 text-center lg:text-left py-16 px-12 flex lg:justify-between items-center">
         <div className="w-full flex flex-col lg:flex-row lg:justify-around">
           <div className="mb-4">
-            {/* Mengubah teks ajakan utama */}
             <p className="text-2xl md:text-4xl font-bold mb-4">
-              Tertarik berkontribusi dalam inovasi infrastruktur digital Telkom?
+              Tertarik bergabung dalam transformasi digital bersama PT Tech XYZ?
             </p>
-            {/* Mengubah teks ajakan tambahan */}
             <p className="text-lg md:text-2xl">
-              Kembangkan keahlian Anda di lingkungan riset ISR Lab yang dinamis.
+              Kembangkan karir Anda di lingkungan kerja yang inovatif dan dinamis.
             </p>
           </div>
 
           <div className="w-full lg:w-72 pt-6 lg:mx-12 flex items-center justify-center lg:justify-start">
-            {" "}
-            {/* Menyesuaikan perataan tombol */}
-            {/* Mengubah teks tombol dan warnanya menjadi merah */}
             <Link
               to="/applycv"
-              className="bg-red-700 hover:bg-red-600 text-white justify-center text-center rounded-lg px-10 py-3 flex items-center group transition duration-300"
+              className="bg-blue-900 hover:bg-blue-800 text-white justify-center text-center rounded-lg px-10 py-3 flex items-center group transition duration-300"
             >
-              {" "}
-              {/* Mengubah warna bg dan hover bg, menambah transition */}
               Kirim CV Anda!
               <svg
                 className="w-5 h-5 ml-1 group-hover:translate-x-2 duration-500 ease-in"

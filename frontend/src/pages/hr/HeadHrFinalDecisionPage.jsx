@@ -3,9 +3,8 @@ import axios from 'axios';
 import Notiflix from 'notiflix';
 import { useAuth } from '../../context/AuthContext';
 
-// ✅ IMPORT MODAL YANG BENAR
-import { HeadHrDecisionModal } from '../../components/hr/HeadHrDecisionModal'; // Modal Eksekusi BARU
-import { ManagerFeedbackDetailModal } from '../../components/hr/ManagerFeedbackDetailModal'; // Modal View (Fixed)
+import { HeadHrDecisionModal } from '../../components/hr/HeadHrDecisionModal';
+import ManagerFeedbackDetailModal from '../../components/hr/ManagerFeedbackDetailModal';
 import HeadHrDecisionTable from '../../components/hr/HeadHrDecisionTable';
 import HeadHrHistoryTable from '../../components/hr/HeadHrHistoryTable';
 
@@ -41,8 +40,9 @@ function HeadHrFinalDecisionPage() {
       const response = await axios.get(API_GET_APPLICATIONS, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      // ✅ TAMBAH 'FINAL_INTERVIEW_SCHEDULED' ke filter
       const relevantData = response.data.filter(app => 
-        ['PENDING_FINAL_DECISION', 'HIRED', 'NOT_HIRED'].includes(app.status)
+        ['PENDING_FINAL_DECISION', 'FINAL_INTERVIEW_SCHEDULED', 'HIRED', 'NOT_HIRED'].includes(app.status)
       );
       setAllCandidates(relevantData);
     } catch (error) {
@@ -58,7 +58,10 @@ function HeadHrFinalDecisionPage() {
   // Filter Tab
   const { pendingList, historyList } = useMemo(() => {
     return {
-      pendingList: allCandidates.filter(app => app.status === 'PENDING_FINAL_DECISION'),
+      // ✅ TAMBAH 'FINAL_INTERVIEW_SCHEDULED' ke pending list (belum ada keputusan)
+      pendingList: allCandidates.filter(app => 
+        ['PENDING_FINAL_DECISION', 'FINAL_INTERVIEW_SCHEDULED'].includes(app.status)
+      ),
       historyList: allCandidates.filter(app => ['HIRED', 'NOT_HIRED'].includes(app.status))
     };
   }, [allCandidates]);
@@ -77,7 +80,7 @@ function HeadHrFinalDecisionPage() {
     setShowDetailModal(true);
   };
 
-  // ✅ HANDLER SUBMIT - PERBAIKAN LOGIC
+  // ✅ HANDLER SUBMIT
   const handleSubmitDecision = async (formData) => {
     console.log('📤 Submitting decision:', formData);
     
@@ -86,14 +89,12 @@ function HeadHrFinalDecisionPage() {
     try {
       const token = getAuthToken();
       
-      // ✅ PASTIKAN LOGIC INI BENAR!
-      // formData.decision sudah 'HIRED' atau 'NOT_HIRED' dari modal
-      const newStatus = formData.decision; // Langsung pakai, sudah benar dari modal
+      const newStatus = formData.decision;
       
       console.log('✅ Status yang akan disimpan:', newStatus);
       
       const payload = {
-        status: newStatus, // 'HIRED' atau 'NOT_HIRED'
+        status: newStatus,
         interview_notes: {
           ...(selectedCandidate.interview_notes || {}),
           final_decision: formData.decision,
@@ -119,6 +120,7 @@ function HeadHrFinalDecisionPage() {
       );
       
       setShowDecisionModal(false);
+      // ✅ Refresh data setelah keputusan berhasil
       fetchData(); 
       
     } catch (error) {
@@ -178,7 +180,7 @@ function HeadHrFinalDecisionPage() {
             <HeadHrDecisionTable 
               candidates={pendingList} 
               onDecide={handleOpenDecision}
-              onViewDetail={handleViewDetail} // Tambahkan ini di table component
+              onViewDetail={handleViewDetail}
             />
           </div>
 
@@ -191,7 +193,7 @@ function HeadHrFinalDecisionPage() {
         </>
       )}
 
-      {/* ✅ MODAL EKSEKUSI - Pakai HeadHrDecisionModal BARU */}
+      {/* ✅ MODAL EKSEKUSI */}
       {showDecisionModal && (
         <HeadHrDecisionModal
           isOpen={showDecisionModal}
@@ -204,7 +206,7 @@ function HeadHrFinalDecisionPage() {
         />
       )}
 
-      {/* ✅ MODAL DETAIL - Pakai yang sudah di-fix */}
+      {/* ✅ MODAL DETAIL */}
       {showDetailModal && (
         <ManagerFeedbackDetailModal
           isOpen={showDetailModal}

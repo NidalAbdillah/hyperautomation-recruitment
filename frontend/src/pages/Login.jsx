@@ -67,17 +67,21 @@ const Login = () => {
 
         // --- 4. PERBAIKAN UTAMA DI SINI ---
         
-        // Cek 'role' (peran) dari 'user' yang dikembalikan oleh backend TS OOP Anda
-        if (user.role === 'head_hr' || user.role === 'staff_hr' || user.role === 'manager') {
-          // Jika ini adalah user internal, "lempar" (redirect) ke dashboard /hr
-          console.log(`Role ${user.role} terdeteksi, mengarahkan ke /hr`);
-          navigate("/hr"); // <-- PERBAIKAN 1: Diubah dari "/admin"
-        } else {
-          // Fallback jika ada role lain (misal 'pelamar' di masa depan)
-          console.log(`Role ${user.role} terdeteksi, mengarahkan ke /`);
-          navigate("/");
+        if (user.role === 'manager') {
+            // KHUSUS MANAGER: Langsung arahkan ke halaman Request Position
+            console.log("Role Manager terdeteksi, redirect ke /hr/request-position");
+            navigate("/hr/request-position");
+        } 
+        else if (user.role === 'head_hr' || user.role === 'staff_hr') {
+            // Head HR & Staff HR: Arahkan ke Dashboard utama
+            console.log(`Role ${user.role} terdeteksi, redirect ke /hr`);
+            navigate("/hr");
+        } 
+        else {
+            // Fallback untuk role lain
+            console.log(`Role ${user.role} tidak dikenali, redirect ke Home`);
+            navigate("/");
         }
-        // --- BATAS PERBAIKAN ---
 
       } else {
         // (Logika error Anda sudah bagus)

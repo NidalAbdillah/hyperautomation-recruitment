@@ -1,24 +1,18 @@
 // backend/src/models/user.model.ts
 import { DataTypes, Model, Optional } from "sequelize";
 import { sequelize } from "../config/database";
-
-// Definisikan atribut yang dimiliki model (untuk type-safety)
 interface UserAttributes {
   id: number;
   name: string;
   email: string;
   passwordHash: string;
-  role: 'head_hr' | 'staff_hr' | 'manager'; // Tipe data peran yang spesifik
+  role: 'head_hr' | 'staff_hr' | 'manager';
   avatarObjectKey: string | null;
   department: string | null;
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
-
-// 2. Definisikan atribut yang opsional saat membuat (misal: id)
 interface UserCreationAttributes extends Optional<UserAttributes, "id" | "avatarObjectKey"> {}
-
-// 3. Buat Class (Kelas) Model Anda
 class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
   public id!: number;
   public name!: string;
@@ -27,14 +21,9 @@ class User extends Model<UserAttributes, UserCreationAttributes> implements User
   public role!: 'head_hr' | 'staff_hr' | 'manager';
   public avatarObjectKey!: string | null;
   public department!: string | null;
-
-  // Timestamps (createdAt, updatedAt) ditambahkan otomatis
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
-
 }
-
-// 4. Inisialisasi Model (ini menggantikan sequelize.define)
 User.init(
   {
     id: {
@@ -77,7 +66,7 @@ User.init(
     },
   },
   {
-    sequelize, // Wajib: instance sequelize
+    sequelize,
     tableName: "users",
     timestamps: true,
   }

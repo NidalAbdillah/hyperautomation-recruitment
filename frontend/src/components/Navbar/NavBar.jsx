@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import NavLinks from "./NavLinks";
 import { HashLink } from "react-router-hash-link";
-import telkomLogo from "../../images/icons/vite.svg";
 
 const NavBar = () => {
   const [top, setTop] = useState(!window.scrollY);
@@ -35,27 +34,26 @@ const NavBar = () => {
         !top ? "bg-white shadow-sm" : ""
       }`}
     >
-      <div className="flex flex-row justify-between items-center py-2">
-        <div className="flex flex-row justify-center md:px-4 items-center text-center font-semibold md:mx-6">
-          <HashLink smooth to="/#hero" className="flex items-center">
-            <img
-              src={telkomLogo}
-              alt="Telkom Indonesia Logo"
-              className="h-8 mr-2"
-            />
-            <div className="flex flex-col items-start mr-2">
-              <h1 className="font-extrabold text-base text-gray-800">
-                InfraServiceResearch
-              </h1>
-              <p className="text-xs text-gray-600 italic">Laboratory</p>
-            </div>
+      <div className="flex flex-row justify-between items-center py-2 px-4 md:px-6">
+        {/* Logo & Branding */}
+        <div className="flex items-center">
+          <HashLink smooth to="/#hero" className="flex flex-col group">
+            <h1 className="font-extrabold text-xl md:text-2xl text-gray-800 leading-tight group-hover:text-blue-600 transition-colors">
+              PT Tech <span className="text-blue-900">X</span><span className="text-red-700">YZ</span>
+            </h1>
+            <p className="text-[10px] md:text-xs text-gray-500 font-medium tracking-wider -mt-0.5 text-right">
+              Company
+            </p>
           </HashLink>
         </div>
 
+        {/* Navigation Menu */}
         <div className="group flex flex-col items-center">
+          {/* Mobile Menu Toggle */}
           <button
-            className="p-1.5 rounded-lg lg:hidden text-red-700"
+            className="p-1.5 rounded-lg lg:hidden text-blue-700 hover:bg-blue-50 transition-colors"
             onClick={handleClick}
+            aria-label="Toggle menu"
           >
             <svg
               className="h-5 w-5 fill-current"
@@ -77,10 +75,12 @@ const NavBar = () => {
             </svg>
           </button>
 
+          {/* Desktop Navigation */}
           <div className="hidden space-x-4 lg:inline-block p-1">
             <NavLinks />
           </div>
 
+          {/* Mobile Navigation Dropdown */}
           <div
             className={`fixed transition-transform duration-300 ease-in-out transform flex justify-center left-0 w-full h-auto rounded-md p-4 bg-white lg:hidden shadow-sm top-12 ${
               isOpen

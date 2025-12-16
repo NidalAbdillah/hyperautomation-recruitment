@@ -23,7 +23,6 @@ const handleErrorResponse = (res: Response, error: any) => {
 const listOpenPositions = async (req: Request, res: Response) => {
   console.log("Controller: Received request to list open job positions.");
   try {
-    // Service sudah di-update untuk filter isArchived: false
     const openPositions = await jobPositionService.getOpenPositions();
     res.status(200).json(openPositions);
   } catch (error: any) {

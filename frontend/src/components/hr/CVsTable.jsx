@@ -31,6 +31,7 @@ const STATUS_DISPLAY_MAP = {
   "INTERVIEW_QUEUED":    { label: "In Queue (Manager)", color: "bg-yellow-100 text-yellow-800" },
   "INTERVIEW_SCHEDULED": { label: "Scheduled (Manager)", color: "bg-purple-100 text-purple-800" },
   "PENDING_FINAL_DECISION": { label: "Final Review (HR)", color: "bg-indigo-100 text-indigo-800" },
+  "FINAL_INTERVIEW_SCHEDULED": { label: "Final Scheduled (HR)", color: "bg-green-100 text-green-800" }, // ✅ TAMBAH INI
   "HIRED":      { label: "Hired", color: "bg-green-100 text-green-800" },
   "NOT_HIRED":  { label: "Not Hired", color: "bg-red-100 text-red-800" },
   "ONBOARDING": { label: "Onboarding", color: "bg-green-100 text-green-800" },

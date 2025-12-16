@@ -7,7 +7,6 @@ import moment from "moment";
 import jobPositionService from "./jobPosition.service";
 import axios from "axios";
 import JSZip from "jszip";
-import emailService from "./email.service";
 import {
   IApplicationService,
   ApplicationCreationDTO,
@@ -246,20 +245,6 @@ public async triggerScheduleWorkflow(
       console.log(
         `[createApplication] SUCCESS! DB Commit OK. Application ID=${newApplication.id}`
       );
-
-      // (Email confirmation ... sisa kode Anda sudah benar)
-      // emailService
-      //   .sendApplicationConfirmation(
-      //     newApplication.email,
-      //     newApplication.fullName,
-      //     newApplication.qualification
-      //   )
-      //   .catch((emailError: any) => {
-      //     console.error(
-      //       `[Email Confirmation] FAILED to send:`,
-      //       emailError.message
-      //     );
-      //   });
 
       // (N8N Webhook trigger ... sisa kode Anda sudah benar)
       const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL;

@@ -77,14 +77,14 @@ function JobDetailModal({ isOpen, onClose, jobData }) {
 
           {/* Specific Requirements */}
           <div>
-            <h4 className="text-base font-semibold text-gray-700 mb-2">Specific Requirements:</h4>
+            <h4 className="text-base font-semibold text-gray-700 mb-2">Persyaratan Khusus:</h4>
             {jobData.specificRequirements && typeof jobData.specificRequirements === 'string' ? (
               <div
                 className="prose prose-sm max-w-none text-gray-700" // `prose` dari Tailwind Typography akan memberi styling default
                 dangerouslySetInnerHTML={{ __html: jobData.specificRequirements }}
               />
             ) : (
-              <p className="text-sm text-gray-500 italic">No specific requirements listed.</p>
+              <p className="text-sm text-gray-500 italic">Tidak ada persyaratan khusus yang tercantum.</p>
             )}
           </div>
         </div>
@@ -93,10 +93,10 @@ function JobDetailModal({ isOpen, onClose, jobData }) {
         <div className="flex-shrink-0 p-4 border-t border-gray-200 bg-gray-50 text-right">
           <Link
             to={`/applycv?posisi=${encodeURIComponent(jobData.name)}`}
-            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            className="inline-flex items-center px-6 py-3 border border-transparent text-base font-medium rounded-md shadow-sm text-white bg-blue-900 hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-900"
             onClick={onClose} // Opsional: tutup modal saat klik apply
           >
-            Apply Now
+            Lamar Sekarang
           </Link>
         </div>
       </div>
