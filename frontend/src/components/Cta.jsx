@@ -11,7 +11,7 @@ const Cta = () => {
               Tertarik bergabung dalam transformasi digital bersama PT Tech XYZ?
             </p>
             <p className="text-lg md:text-2xl">
-              Kembangkan karir Anda di lingkungan kerja yang inovatif dan dinamis.
+              Kembangkan karir Anda di lingkungan kerja yang inovatif.
             </p>
           </div>
 
