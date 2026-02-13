@@ -53,11 +53,6 @@ class ApplicationService implements IApplicationService {
     console.log("ApplicationService instantiated.");
   }
 
-// src/services/application.service.ts
-
-  // src/services/application.service.ts
-
-// src/services/application.service.ts
 
 public async triggerScheduleWorkflow(
   applicationId: number,
@@ -180,7 +175,7 @@ public async triggerScheduleWorkflow(
   return application;
 }
 
-  public async createApplication(
+public async createApplication(
     applicationData: ApplicationCreationDTO,
     cvFile: Express.Multer.File
   ): Promise<CvApplication> {
@@ -210,7 +205,7 @@ public async triggerScheduleWorkflow(
         // (const position = ... Dihapus)
 
       const existingApplication = await CvApplication.findOne({
-        where: {
+       where: {
           email: applicationData.email,
           appliedPositionId: position.id, // <-- Gunakan 'position' dari luar
           isArchived: false,
@@ -285,7 +280,7 @@ public async triggerScheduleWorkflow(
         try {
           await minioService.deleteCvFile(uploadedMinioObjectName); 
         } catch (cleanupError: any) {
-          console.error(
+          console.error(-
             "[createApplication] Failed to cleanup MinIO file:",
             cleanupError.message
           );

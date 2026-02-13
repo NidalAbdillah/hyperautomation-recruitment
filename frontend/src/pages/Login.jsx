@@ -192,7 +192,7 @@ const Login = () => {
               <div className="mt-6">
                 <button
                   type="submit"
-                  className={`flex items-center justify-center w-full px-4 py-3 rounded-lg shadow-xl text-white bg-red-700 font-bold transition ease-in-out duration-300 ${isLoading ? "opacity-50 cursor-not-allowed" : "hover:bg-red-800"}`}
+                  className={`flex items-center justify-center w-full px-4 py-3 rounded-lg shadow-xl text-white bg-blue-700 font-bold transition ease-in-out duration-300 ${isLoading ? "opacity-50 cursor-not-allowed" : "hover:bg-blue-800"}`}
                   disabled={isLoading}
                 >
                   {isLoading ? (

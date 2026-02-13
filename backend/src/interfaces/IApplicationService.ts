@@ -61,12 +61,10 @@ export interface IApplicationService {
   deleteApplication(applicationId: number): Promise<{ success: true; message: string }>;
   downloadCvFile(applicationId: number): Promise<DownloadFileStream>;
 
-  // --- 2. UBAH TANDA (SIGNATURE) FUNGSI INI ---
   updateApplicationStatus(
     applicationId: number,
     updateData: ApplicationStatusUpdateDTO // <-- Ganti dari 'string' ke DTO
   ): Promise<CvApplication>;
-  // --- BATAS PERUBAHAN ---
 
   saveAutomatedAnalysisResult(
     applicationId: number,

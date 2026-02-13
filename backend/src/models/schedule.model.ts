@@ -1,29 +1,32 @@
 // src/models/schedule.model.ts
 import { DataTypes, Model, Optional } from "sequelize";
-import { sequelize } from "../config/database"; // Pastikan path ini benar
+import { sequelize } from "../config/database";
 
-// Interface untuk atribut Schedule
+// Definisi struktur data jadwal.
+// Memastikan tipe data tanggal (Date) konsisten agar sinkronisasi ke Google Calendar via n8n tidak error format.
 interface ScheduleAttributes {
   id: number;
   title: string;
   startDate: Date;
   endDate: Date;
   description: string | null;
-  // --- ✅ PR: TAMBAHKAN FOREIGN KEY ---
+  // Foreign Key: Menghubungkan jadwal spesifik ke satu pelamar.
+  // Alur: Agar sistem tahu "Jadwal jam 9 ini interview-nya siapa?".
   applicationId: number | null; 
-  // --- BATAS PR ---
   readonly createdAt?: Date;
   readonly updatedAt?: Date;
 }
 
-// Interface untuk data yang dibutuhkan saat membuat Schedule baru
+// Aturan input saat membuat jadwal baru.
+// ID dan timestamps diurus sistem, applicationId opsional (bisa null kalau ini jadwal internal HR non-interview).
 interface ScheduleCreationAttributes
   extends Optional<
     ScheduleAttributes,
-    "id" | "description" | "createdAt" | "updatedAt" | "applicationId" // <-- ✅ PR: Tambahkan "applicationId"
+    "id" | "description" | "createdAt" | "updatedAt" | "applicationId"
   > {}
 
-// Definisikan Model
+// Wadah OOP untuk tabel Schedule dan fungsi database dari Sequelize.
+
 class Schedule
   extends Model<ScheduleAttributes, ScheduleCreationAttributes>
   implements ScheduleAttributes
@@ -33,16 +36,13 @@ class Schedule
   public startDate!: Date;
   public endDate!: Date;
   public description!: string | null;
-  // --- ✅ PR: TAMBAHKAN FOREIGN KEY ---
   public applicationId!: number | null;
-  // --- BATAS PR ---
 
-  // Timestamps
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
 
-// Inisialisasi Model
+// Konfigurasi tabel fisik di database.
 Schedule.init(
   {
     id: {
@@ -54,8 +54,11 @@ Schedule.init(
     title: {
       type: DataTypes.STRING,
       allowNull: false,
-      comment: "Judul event atau jadwal",
+      comment: "Judul event atau jadwal (misal: 'Interview Teknis - Nidal')",
     },
+    // Waktu Mulai & Selesai.
+    // Alur: Data ini krusial. Backend akan kirim ini ke n8n, lalu n8n booking slot di Google Calendar.
+    // Tipe DATE di sini dipetakan ke TIMESTAMPTZ di Postgres untuk akurasi zona waktu.
     startDate: {
       type: DataTypes.DATE,
       allowNull: false,
@@ -69,27 +72,28 @@ Schedule.init(
     description: {
       type: DataTypes.TEXT,
       allowNull: true,
-      comment: "Deskripsi atau detail event",
+      comment: "Deskripsi atau detail event (link meet, catatan, dll)",
     },
 
-    // --- ✅ PR: TAMBAHKAN DEFINISI KOLOM (Sesuai Migrasi Anda) ---
+    // Relasi ke tabel Pelamar (CvApplication).
+    // Ini jembatan penting. Tanpa kolom ini, jadwal jadi berdiri sendiri.
     applicationId: {
       type: DataTypes.INTEGER,
-      allowNull: true, // Boleh null (untuk event manual HR)
+      allowNull: true, // Boleh null jika jadwal manual internal HR.
       references: {
-        model: "cv_applications", // Nama tabel aplikasi
+        model: "cv_applications",
         key: "id",
       },
       onUpdate: "CASCADE",
+      // Safety Net: Jika data pelamar dihapus, jadwalnya JANGAN dihapus (history), tapi set NULL.
       onDelete: "SET NULL", 
       comment: "ID dari aplikasi CV jika event ini adalah wawancara",
     },
-    // --- BATAS PR ---
   },
   {
-    sequelize, // Koneksi sequelize
-    tableName: "schedules", // Nama tabel di database
-    timestamps: true, // Otomatis kelola createdAt dan updatedAt
+    sequelize,
+    tableName: "schedules",
+    timestamps: true,
     comment: "Tabel untuk menyimpan data jadwal atau event kalender",
   }
 );
