@@ -2,13 +2,13 @@
 import { Sequelize } from "sequelize";
 import { sequelize, initializeDatabase as connectToDB } from "../config/database";
 
-// Impor setiap model SECARA EKSPLISIT
+// Import semua model secara eksplisit agar TypeScript mengenali tipe datanya.
 import User from "./user.model";
 import JobPosition from "./jobPosition.model";
 import CvApplication from "./cvApplication.model";
-import Schedule from "./schedule.model"; // <-- 1. TAMBAHKAN INI
+import Schedule from "./schedule.model"; 
 
-// Buat objek db untuk menampung model
+// Mengumpulkan semua model dalam satu objek 'db' untuk kemudahan akses (opsional, tapi rapi).
 const db = {
   sequelize,
   Sequelize,
@@ -18,61 +18,76 @@ const db = {
   Schedule,
 };
 
-// --- Inisialisasi Asosiasi (Relasi) ---
+// =================================================================
+// DEFINISI ASOSIASI (RELASI ANTAR TABEL)
+// Bagian ini mendefinisikan aturan "Join" agar bisa melakukan Eager Loading (include).
+// =================================================================
+
+// 1. Relasi: Lowongan <-> Pelamar (One-to-Many)
+// Logika: Satu Posisi Kerja (misal: "Backend Dev") bisa memiliki BANYAK Pelamar.
+// Alur: Saat buka detail lowongan, kita bisa langsung tarik daftar semua pelamarnya.
 JobPosition.hasMany(CvApplication, {
   foreignKey: "appliedPositionId",
-  as: "applications",
+  as: "applications", // Alias untuk dipakai di query: include: ['applications']
 });
 
+// Kebalikannya: Satu Pelamar hanya melamar untuk SATU Posisi spesifik (pada satu waktu).
 CvApplication.belongsTo(JobPosition, {
   foreignKey: "appliedPositionId",
-  as: "appliedPosition",
+  as: "appliedPosition", // Alias: pelamar.appliedPosition.name
 });
 
+
+// 2. Relasi: User (Manager) <-> Lowongan (One-to-Many)
+// Logika: Satu Manager bisa me-request BANYAK Lowongan kerja.
+// Alur: Fitur Audit. Head HR bisa melihat "Manager A ini minta pegawai apa saja sih bulan ini?".
 User.hasMany(JobPosition, {
   foreignKey: 'requestedById',
   as: 'requestedPositions'
 });
 
+// Kebalikannya: Satu Lowongan pasti diminta oleh SATU User (Requestor).
 JobPosition.belongsTo(User, {
   foreignKey: 'requestedById',
-  as: 'requestor'
+  as: 'requestor' // Alias: job.requestor.name (Untuk menampilkan "Requested By: Nidal")
 });
 
+
+// 3. Relasi: Pelamar <-> Jadwal Interview (One-to-One)
+// Logika: Satu Pelamar memiliki SATU Jadwal Interview aktif.
+// Alur: Menghubungkan data kandidat dengan slot waktu di Google Calendar.
 CvApplication.hasOne(Schedule, {
   foreignKey: "applicationId",
-  as: "schedule", // CvApplication.getSchedule()
+  as: "schedule", 
 });
 
-// Satu Jadwal milik SATU Kandidat (Aplikasi)
+// Kebalikannya: Satu Jadwal Interview pasti milik SATU Pelamar.
 Schedule.belongsTo(CvApplication, {
   foreignKey: "applicationId",
-  as: "application", // Schedule.getApplication()
+  as: "application", // Alias: schedule.application.fullName (Untuk judul event di kalender)
 });
 
 console.log("Database models associations established.");
 
+// Fungsi inisialisasi database yang akan dipanggil di 'app.ts' saat server nyala.
 const initializeDatabase = async () => {
   try {
-
-    await connectToDB(); 
-    
-    
+    await connectToDB(); // Tes koneksi ke PostgreSQL
     console.log("Database connection authenticated successfully.");
   } catch (error) {
     console.error("Failed to authenticate database connection:", error);
-    process.exit(1);
+    process.exit(1); // Matikan server jika DB gagal konek (Fatal Error).
   }
 };
 
-// Ekspor
+// Ekspor modul agar bisa dipakai di Controller/Service.
 export {
   sequelize,
-  initializeDatabase, // Ini yang akan dipanggil oleh app.ts
+  initializeDatabase, 
   User,
   JobPosition,
   CvApplication,
-  Schedule, // <-- 3. TAMBAHKAN INI
+  Schedule, 
 };
 
 export default db;

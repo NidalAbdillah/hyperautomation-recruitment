@@ -8,12 +8,9 @@ import {
   RankFiltersDTO,
   ApplicationStatusUpdateDTO,
 } from "../interfaces/IApplicationService";
-import { Stream } from "stream"; // Pastikan Stream diimpor
+import { Stream } from "stream";
 
-// --- PERBAIKAN 1: Definisikan Error Map di luar ---
-/**
- * Peta untuk mengubah nama field error dari database ke frontend.
- */
+// ini untuk memetakan field error dari DB ke field yang dipahami Frontend
 const validationErrorFieldMap: { [key: string]: string } = {
   fullName: "fullName",
   email: "email",
@@ -21,29 +18,28 @@ const validationErrorFieldMap: { [key: string]: string } = {
   agreeTerms: "agreeTerms",
   cvFileObjectKey: "cv_file",
 };
-// --- BATAS PERBAIKAN 1 ---
-
-/**
- * Helper untuk menangani respons error yang konsisten.
- */
+// untuk menangkap error secara konsisten di semua controller
+// res: respone sebagai parameter untuk mengirim response error dari service atau controller
+// error: any karena bisa berupa error custom dengan properti status dan message, atau error dari library seperti Sequelize yang memiliki struktur berbeda
 const handleErrorResponse = (res: Response, error: any) => {
+  // statuscode default 500 untuk error tak terduga, message default untuk menjaga konsistensi response error
   const statusCode = error.status || 500;
+  // message default untuk menjaga konsistensi response error
   const message = error.message || "An unexpected error occurred.";
+  // ini dinamis sesuai error yang diterima, bisa error custom atau error dari library
   console.error(`Controller Error: Status ${statusCode}, Message: ${message}`, error.stack);
   
+  // erorr dari sequelize saat validasi karena duplicate atau format salah, kita map field errornya ke field yang dipahami frontend agar lebih user-friendly
   if (error instanceof ValidationError) {
     const errors: { [key: string]: string[] } = {};
-    
-    // PERBAIKAN 2: Gunakan map yang aman
+    // Pemetaan field error dari DB ke Frontend
     error.errors.forEach((err: any) => {
-      const dbField: string = err.path; // Jadikan string
+      const dbField: string = err.path;
       const frontendField: string = validationErrorFieldMap[dbField] || dbField; // Gunakan map
 
       if (!errors[frontendField]) errors[frontendField] = [];
       errors[frontendField].push(err.message);
     });
-    // --- BATAS PERBAIKAN 2 ---
-
     return res.status(400).json({ message: "Validation failed.", errors });
   }
   if (!res.headersSent) {
@@ -51,15 +47,12 @@ const handleErrorResponse = (res: Response, error: any) => {
   }
 };
 
-// --- Core Application Flow ---
-
+// untuk submit aplikasi baru
 const submitApplication = async (req: Request, res: Response) => {
   console.log("Controller: submitApplication started.");
-  
   try {
     const body = req.body as any;
     const errors: { [key: string]: string } = {};
-
     if (!body.fullName) errors.fullName = "Nama Lengkap wajib diisi.";
     if (!body.email) errors.email = "Email wajib diisi.";
     if (!body.appliedPositionId) errors.appliedPositionId = "Posisi Tersedia wajib dipilih.";
@@ -67,7 +60,6 @@ const submitApplication = async (req: Request, res: Response) => {
         errors.agreeTerms = "Anda harus menyetujui Syarat dan Ketentuan.";
     }
     if (!req.file) errors.cv_file = "CV wajib diupload.";
-
     if (Object.keys(errors).length > 0) {
       console.log("Controller: Basic validation failed.", errors);
       return res.status(400).json({
@@ -77,37 +69,37 @@ const submitApplication = async (req: Request, res: Response) => {
       });
     }
 
+// untuk DTO agar service tidak tergantung req/res cukup pakai applicationData dan gunakan DTO dari interface agar sesuai kontrak
     const applicationData: ApplicationCreationDTO = {
       fullName: body.fullName,
       email: body.email,
       appliedPositionId: body.appliedPositionId,
       agreeTerms: true,
     };
-
+    // multer file untuk CV
     const cvFile = req.file!; 
-
     console.log("Controller: Calling service with data:", {
       fullName: applicationData.fullName,
       email: applicationData.email,
       appliedPositionId: applicationData.appliedPositionId,
     });
 
+    // panggil service untuk buat aplikasi dan await sampe selesai
     const newApplication = await applicationService.createApplication(applicationData, cvFile);
-
     console.log("Controller: Application created successfully, ID:", newApplication.id);
-
+    // balas ke frontend
     return res.status(201).json({
       success: true,
       message: "Application submitted successfully. We will contact you soon.",
       data: newApplication,
     });
 
+  // jika error
   } catch (error: any) {
     console.error(`Controller Error: Status ${error.status || 500}, Message: ${error.message}`, error);
-
     const statusCode = error.status || 500;
     const message = error.message || "Internal server error";
-
+    // erorr saat validasi dari ORM Sequelize karena duplicate atau format salah
     return res.status(statusCode).json({
       success: false,
       message: message,
@@ -116,22 +108,29 @@ const submitApplication = async (req: Request, res: Response) => {
   }
 };
 
+// untuk get all aplikasi yang belum di archive untuk aplikasi yang aktif
 const getAllApplications = async (req: Request, res: Response) => {
   console.log("Controller: Request for all non-archived applications.");
   try {
+    // panggil service dan await hasilnya
     const applications = await applicationService.getAllApplications();
     res.status(200).json(applications);
   } catch (error: any) {
+    // tanggkap erorr dan kirim response error yang konsisten
     handleErrorResponse(res, error);
   }
 };
 
+// untuk get aplikasi berdasarkan ID
 const getApplicationById = async (req: Request, res: Response) => {
   try {
+    // validasi bahwa ID adalah angka
     const applicationId = parseInt(req.params.id, 10);
+    // jika id bukan angka kirim 400(input tidak valid)
     if (isNaN(applicationId)) { 
         const err: any = new Error("Invalid application ID."); err.status = 400; throw err; 
     }
+    // panggil service dan await hasilnya, 200 (OK) jika berhasil
     const application = await applicationService.getApplicationById(applicationId);
     res.status(200).json(application);
   } catch (error: any) {
@@ -139,6 +138,7 @@ const getApplicationById = async (req: Request, res: Response) => {
   }
 };
 
+// hapus aplikasi berdasarkan id
 const deleteApplication = async (req: Request, res: Response) => {
   try {
     const applicationId = parseInt(req.params.id, 10);
@@ -152,16 +152,22 @@ const deleteApplication = async (req: Request, res: Response) => {
   }
 };
 
+// untuk download file CV berdasarkan ID aplikasi
 const downloadCvFile = async (req: Request, res: Response) => {
   try {
     const applicationId = parseInt(req.params.id, 10);
     if (isNaN(applicationId)) { 
         const err: any = new Error("Invalid application ID."); err.status = 400; throw err; 
     }
+    // panggil service untuk download file CV, file stream untuk cicil data agar tidak overload memory
     const { fileStream, fileName, contentType } = await applicationService.downloadCvFile(applicationId);
+    // set header agar browser tahu ini file download
     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    // set content type sesuai file
     res.setHeader("Content-Type", contentType);
+    // pipe stream ke response agar data dikirim secara bertahap
     fileStream.pipe(res);
+    // tangkap error pada stream
     fileStream.on("error", (streamError: any) => {
         if (!res.headersSent) handleErrorResponse(res, streamError);
     });
@@ -170,12 +176,14 @@ const downloadCvFile = async (req: Request, res: Response) => {
   }
 };
 
+// untuk melihat file CV di browser berdasarkan ID aplikasi
 const viewCvFile = async (req: Request, res: Response) => {
    try {
     const applicationId = parseInt(req.params.id, 10);
     if (isNaN(applicationId)) { 
         const err: any = new Error("Invalid application ID."); err.status = 400; throw err; 
     }
+    // bedanya di sini tidak ada header content-disposition attachment untuk download
     const { fileStream, contentType } = await applicationService.downloadCvFile(applicationId);
     res.setHeader("Content-Type", contentType);
     fileStream.pipe(res);
@@ -187,50 +195,44 @@ const viewCvFile = async (req: Request, res: Response) => {
   }
 };
 
+// untuk update status aplikasi berdasarkan ID
 const updateApplicationStatus = async (req: Request, res: Response) => {
   try {
     const applicationId = parseInt(req.params.id, 10);
-    
-    // --- INI PERBAIKANNYA ---
-    // 1. Ambil seluruh body sebagai DTO
+    // gunakan DTO untuk validasi dan kontrak data
     const updateData = req.body as ApplicationStatusUpdateDTO; 
-    
     if (isNaN(applicationId)) { 
         const err: any = new Error("Invalid application ID."); err.status = 400; throw err; 
     }
-    
-    // 2. Validasi bahwa body tidak kosong
+    // validasi bahwa setidaknya ada satu field yang diupdate, yaitu status atau interview_notes, jika tidak ada kirim 400 (input tidak valid)
     if (!updateData || Object.keys(updateData).length === 0) { 
         const err: any = new Error("Update data is required (e.g., status or interview_notes)."); 
         err.status = 400; 
         throw err; 
     }
-
-    // 3. Kirim seluruh objek 'updateData' ke service, bukan hanya string 'status'
+    // panggil service, dan await hasilnya untuk update
     const updatedApplication = await applicationService.updateApplicationStatus(
       applicationId, 
-      updateData // <-- Kirim objek utuh
+      updateData // Kirim objek utuh
     );
-    // --- BATAS PERBAIKAN ---
-
     res.status(200).json({ message: "Application status updated.", application: updatedApplication });
-  
   } catch (error: any) {
     handleErrorResponse(res, error);
   }
 };
 
-// --- Automation & Bulk Actions ---
-
+// untuk menerima hasil analisis otomatis dari n8n dan menyimpan ke database berdasarkan ID aplikasi
 const handleN8nResult = async (req: Request, res: Response) => {
   try {
     const applicationId = parseInt(req.params.id, 10);
     if (isNaN(applicationId)) { 
         const err: any = new Error("Invalid application ID."); err.status = 400; throw err; 
     }
+    // gunakan DTO sesuai kontrak data yang dikirim n8n
     const n8nResult = req.body as N8nResultDTO;
     console.log(`Controller: Received N8N result for Application ID: ${applicationId}`);
     
+    // panggil service untuk simpan hasil analisis otomatis dari n8n ke database, dan await hasilnya
     const updatedApplication = await applicationService.saveAutomatedAnalysisResult(applicationId, n8nResult);
     if (!updatedApplication) {
       const error: any = new Error(`Application with ID ${applicationId} not found.`);
@@ -243,6 +245,7 @@ const handleN8nResult = async (req: Request, res: Response) => {
   }
 };
 
+// get yang udah di arsip
 const getArchivedApplications = async (req: Request, res: Response) => {
   try {
     const applications = await applicationService.getAllArchivedApplications();
@@ -250,6 +253,7 @@ const getArchivedApplications = async (req: Request, res: Response) => {
   } catch (error: any) { handleErrorResponse(res, error); }
 };
 
+// untuk aksi archive banyak sekaligus
 const archiveApplicationsController = async (req: Request, res: Response) => {
   try {
     const { ids } = req.body as { ids: number[] };
@@ -261,6 +265,7 @@ const archiveApplicationsController = async (req: Request, res: Response) => {
   } catch (error: any) { handleErrorResponse(res, error); }
 };
 
+// untuk aksi unarchive banyak sekaligus
 const unarchiveApplicationsController = async (req: Request, res: Response) => {
   try {
     const { ids } = req.body as { ids: number[] };
@@ -272,6 +277,7 @@ const unarchiveApplicationsController = async (req: Request, res: Response) => {
   } catch (error: any) { handleErrorResponse(res, error); }
 };
 
+// untuk aksi hapus banyak aplikasi aktif sekaligus
 const bulkDeleteActiveController = async (req: Request, res: Response) => {
   try {
     const { ids } = req.body as { ids: number[] };
@@ -288,6 +294,7 @@ const bulkDeleteActiveController = async (req: Request, res: Response) => {
   }
 };
 
+//untuk download banyak file CV sekaligus dalam bentuk ZIP
 const bulkDownloadController = async (req: Request, res: Response) => {
     try {
         const { ids } = req.body as { ids: number[] };
@@ -308,37 +315,36 @@ const bulkDownloadController = async (req: Request, res: Response) => {
     }
 };
 
-// src/controllers/applications.controller.ts
 
+// untuk trigger jadwal interview via n8n berdasarkan ID aplikasi
 const triggerSchedule = async (req: Request, res: Response) => {
   try {
+    // ambil ID aplikasi dari parameter URL
     const applicationId = parseInt(req.params.id, 10);
-    const scheduleData = req.body; // { dateTime, endTime, notes_from_hr, type, preference }
-    const hrUser = (req as any).user; // Pastikan user ada
+    // ambil data jadwal dari body request, pastikan ada field yang diperlukan seperti dateTime, endTime, type (manager/final_hr), dan preference (online/offline)
+    const scheduleData = req.body;
+    const hrUser = (req as any).user;
 
     if (isNaN(applicationId)) {
       const err: any = new Error("Invalid application ID."); err.status = 400; throw err;
     }
-    
-    // --- 🔥 TAMBAHAN VALIDASI ---
-    // Pastikan 'type' ada agar Service tidak salah langkah
+    // validasi bahwa field yang diperlukan ada, jika tidak kirim 400 (input tidak valid)
     if (!scheduleData.type) {
         const err: any = new Error("Interview type (manager/final_hr) is required."); 
         err.status = 400; 
         throw err;
     }
-
+    // validasi bahwa type harus manager atau final_hr, jika tidak kirim 400 (input tidak valid)
     if (!scheduleData.dateTime || !scheduleData.endTime) {
       const err: any = new Error("dateTime and endTime are required."); err.status = 400; throw err;
     }
-    
+    // validasi bahwa dateTime dan endTime harus berupa tanggal yang valid, jika tidak kirim 400 (input tidak valid)
     if (!hrUser) {
       const err: any = new Error("HR User not authenticated."); err.status = 401; throw err;
     }
-
     console.log(`Controller: Triggering schedule ${scheduleData.type} for App ID ${applicationId}`);
-
-    // Panggil Service
+    
+    // panggil service untuk trigger jadwal interview via n8n, dan await hasilnya untuk update aplikasi dengan data jadwal yang baru
     const updatedApplication = await applicationService.triggerScheduleWorkflow(
       applicationId,
       scheduleData,
@@ -355,6 +361,7 @@ const triggerSchedule = async (req: Request, res: Response) => {
   }
 };
 
+// untuk mendapatkan daftar aplikasi yang sudah diurutkan berdasarkan skor AI dan filter lainnya sesuai query params
 const getRankedApplicationsController = async (req: Request, res: Response) => {
   console.log("Controller: Request for ranked applications received.");
   try {

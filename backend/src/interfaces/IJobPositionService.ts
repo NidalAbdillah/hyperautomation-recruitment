@@ -1,9 +1,7 @@
 // src/interfaces/IJobPositionService.ts
 import { JobPosition } from "../models"; // Impor tipe Model
-// --- PERBAIKAN DI SINI ---
 // Impor "kontrak" DTO yang kita butuhkan dari file lain
 import { UserResponseDTO } from "./IUserService";
-// --- BATAS PERBAIKAN ---
 
 /**
  * Tipe Data Transfer Object (DTO) untuk membuat atau memperbarui Job Position.

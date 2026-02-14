@@ -17,7 +17,7 @@ interface JobPositionAttributes {
   registrationEndDate: Date | null;
   specificRequirements: string | null;
   availableSlots: number;
-  status: JobStatus; // Menggunakan tipe custom di atas
+  status: JobStatus; // Menggunakan tipe custom
   announcement: string | null;
   requestedById: number | null;
   isArchived: boolean;
@@ -26,7 +26,7 @@ interface JobPositionAttributes {
 }
 
 // Aturan input saat Manager pertama kali membuat request.
-// Manager cukup isi data inti, sisanya (seperti ID atau Status) akan di-handle default value oleh sistem.
+// Manager cukup isi data inti, sisanya otomatis
 interface JobPositionCreationAttributes
   extends Optional<
     JobPositionAttributes,
@@ -42,7 +42,7 @@ interface JobPositionCreationAttributes
   > {}
 
 // Wadah OOP untuk tabel JobPosition.
-// Memungkinkan kita memanggil fungsi database seperti .findAll() atau .update() dengan cara yang rapi.
+//  fungsi database seperti sequilize .findAll() atau .update() dengan cara yang rapi.
 class JobPosition
   extends Model<JobPositionAttributes, JobPositionCreationAttributes>
   implements JobPositionAttributes
